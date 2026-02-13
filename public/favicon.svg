@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="cyber-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9;stop-opacity:1" /> <!-- Sky-500 -->
+      <stop offset="100%" style="stop-color:#0284c7;stop-opacity:1" /> <!-- Sky-600 -->
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Outer Hexagon or Node Shape -->
+  <polygon points="50,10 90,30 90,70 50,90 10,70 10,30" fill="transparent" stroke="url(#cyber-gradient)" stroke-width="6" filter="url(#glow)"/>
+  
+  <!-- Inner Neural Network Nodes -->
+  <circle cx="50" cy="50" r="12" fill="#0ea5e9" filter="url(#glow)"/>
+  <circle cx="50" cy="25" r="5" fill="#f1f5f9"/>
+  <circle cx="28" cy="62" r="5" fill="#f1f5f9"/>
+  <circle cx="72" cy="62" r="5" fill="#f1f5f9"/>
+  
+  <!-- Connections -->
+  <line x1="50" y1="25" x2="50" y2="50" stroke="#f1f5f9" stroke-width="2"/>
+  <line x1="28" y1="62" x2="50" y2="50" stroke="#f1f5f9" stroke-width="2"/>
+  <line x1="72" y1="62" x2="50" y2="50" stroke="#f1f5f9" stroke-width="2"/>
+</svg>

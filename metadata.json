@@ -1,0 +1,7 @@
+{
+  "name": "AI Issue Analyzer Pro",
+  "description": "A professional quality-assurance tool that uses Gemini AI to analyze software issues from text or voice and generates interactive technical checklists.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
