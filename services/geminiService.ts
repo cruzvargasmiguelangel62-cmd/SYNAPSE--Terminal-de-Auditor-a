@@ -1,7 +1,10 @@
 import { AnalysisResponse } from "../types";
 
 const getApiUrl = () => {
-  return import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  // en producción el frontend y el backend suelen compartir el mismo dominio,
+  // por lo que podemos usar el origen actual como URL base si no se provee
+  // explícitamente una variable de entorno.
+  return import.meta.env.VITE_API_URL || window.location.origin;
 };
 
 export const analyzeIssues = async (userInput: string, apiKey?: string): Promise<AnalysisResponse> => {

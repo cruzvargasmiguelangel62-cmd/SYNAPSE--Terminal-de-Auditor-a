@@ -20,7 +20,10 @@ export default function KeepAlive() {
         const sendRenderPulse = async () => {
             try {
                 // Hacemos una petición al Backend para mantenerlo despierto
-                const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+                // Usamos window.location.origin como respaldo cuando no hay
+                // variable VITE_API_URL configurada (caso típico en despliegues
+                // donde la API sirve también los ficheros estáticos).
+                const apiBaseUrl = import.meta.env.VITE_API_URL || window.location.origin;
                 
                 // Intentamos el endpoint /health que definimos en backend/server.js
                 await fetch(`${apiBaseUrl}/health`, { mode: 'no-cors' }).catch(() => {
