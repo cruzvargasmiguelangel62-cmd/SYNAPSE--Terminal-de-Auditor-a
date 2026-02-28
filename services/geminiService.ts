@@ -1,4 +1,4 @@
-import { AnalysisResponse } from "../types";
+import { AnalysisResponse, Severity } from "../types";
 
 const getApiUrl = () => {
   // en producción el frontend y el backend suelen compartir el mismo dominio,
@@ -19,6 +19,15 @@ const getApiUrl = () => {
 // Normaliza la estructura devuelta por el backend/IA para que siempre tenga
 // la forma { summary: string; issues: Issue[] }.
 // El modelo a veces responde con claves en español como `tareas_pendientes`.
+// helper that converts various severity strings into our enum
+const normalizeSeverity = (raw: any): Severity => {
+  if (!raw) return Severity.LOW;
+  const s = String(raw).toLowerCase();
+  if (s.includes('high') || s.includes('alta')) return Severity.HIGH;
+  if (s.includes('med') || s.includes('media')) return Severity.MEDIUM;
+  return Severity.LOW;
+};
+
 const normalizeResponse = (obj: any) => {
   if (!obj) throw new Error('Respuesta vacía del servidor');
   const rawIssues = obj.issues || obj.tareas_pendientes || obj.tareas || obj.tasks || [];
@@ -27,20 +36,21 @@ const normalizeResponse = (obj: any) => {
     throw new Error('Formato de respuesta inválido: campo de issues no es arreglo');
   }
 
-  // transformar cada elemento para garantizar que tenga `title` y `desc`
+  // transformar cada elemento para garantizar que tenga `title`, `desc`, `severity` y `fix`
   const issues = rawIssues.map((i: any) => {
     const title = i.title || i.titulo || i.descripcion || i.description || '';
     const desc = i.desc || i.descripcion || i.detalles || i.detail || '';
     const category = i.category || i.categoria || undefined;
-    const severity = i.severity || i.prioridad || undefined;
-    const fix = i.fix || i.resolucion || '';
+    // aceptar múltiples claves para el plan técnico
+    const fix = i.fix || i.resolucion || i.plan_tecnico || i.plan_accion || i.plan || '';
+    const rawSeverity = i.severity || i.prioridad || i.gravedad || i.level || undefined;
 
     return {
       ...i,
       title,
       desc,
       category,
-      severity,
+      severity: normalizeSeverity(rawSeverity),
       fix
     };
   });

@@ -13,21 +13,27 @@ interface IssueTableProps {
   onCopyIssue?: (issue: Issue) => void;
 }
 
-const SeverityBadge = ({ severity }: { severity: Severity }) => {
-  const configs = {
+// Accepts a severity that may not exactly match the enum (normalized earlier)
+const SeverityBadge = ({ severity }: { severity?: string }) => {
+  // fallback to low if we don't recognise the value
+  const normalized: Severity = (severity === Severity.HIGH || severity === Severity.MEDIUM || severity === Severity.LOW)
+    ? (severity as Severity)
+    : Severity.LOW;
+
+  const configs: Record<Severity, string> = {
     [Severity.HIGH]: "bg-red-500/10 text-red-400 border-red-500/20",
     [Severity.MEDIUM]: "bg-amber-500/10 text-amber-400 border-amber-500/20",
     [Severity.LOW]: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
   };
-  const labels = {
+  const labels: Record<Severity, string> = {
     [Severity.HIGH]: "Alta",
     [Severity.MEDIUM]: "Media",
     [Severity.LOW]: "Baja",
   };
 
   return (
-    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${configs[severity]}`}>
-      {labels[severity]}
+    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${configs[normalized]}`}> 
+      {labels[normalized]}
     </span>
   );
 };

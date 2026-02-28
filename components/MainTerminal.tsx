@@ -676,8 +676,8 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                                 title: i.title && i.title.trim() ? i.title : '(sin título)',
                                 description: i.desc,
                                 category: i.category,
-                                severity: i.severity,
-                                fix_plan: i.fix,
+                                severity: i.severity || Severity.LOW,
+                                fix_plan: i.fix || 'Pendiente de resolución técnica.',
                                 is_done: false
                             };
                         });
@@ -723,8 +723,8 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                                     title: i.title && i.title.trim() ? i.title : '(sin título)',
                                     description: i.desc,
                                     category: i.category,
-                                    severity: i.severity,
-                                    fix_plan: i.fix,
+                                    severity: i.severity || Severity.LOW,
+                                    fix_plan: i.fix || 'Pendiente de resolución técnica.',
                                     is_done: false
                                 };
                             });
