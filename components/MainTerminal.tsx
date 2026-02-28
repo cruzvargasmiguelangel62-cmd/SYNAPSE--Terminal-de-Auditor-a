@@ -514,7 +514,12 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         is_done: false
                     }));
 
-                    const { data: insertedIssues } = await supabase.from('issues').insert(issuesToInsert).select();
+                    const { data: insertedIssues, error: insertError } = await supabase.from('issues').insert(issuesToInsert).select();
+                    if (insertError) {
+                        console.error('Supabase insert error', insertError);
+                        addToast(`Error al guardar hallazgos: ${insertError.message}`, 'error');
+                        throw insertError;
+                    }
 
                     if (insertedIssues) {
                         const finalIssues = respIssues.map(i => {
@@ -551,8 +556,13 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                             is_done: false
                         }));
 
-                        const { data: insertedIssues } = await supabase.from('issues').insert(issuesToInsert).select();
+                        const { data: insertedIssues, error: insertError } = await supabase.from('issues').insert(issuesToInsert).select();
 
+                        if (insertError) {
+                            console.error('Supabase insert error', insertError);
+                            addToast(`Error al guardar hallazgos: ${insertError.message}`, 'error');
+                            throw insertError;
+                        }
                         if (insertedIssues) {
                             const finalIssues = respIssues.map(i => {
                                 const dbRecord = insertedIssues.find(si => si.external_id === i.id);
@@ -637,7 +647,12 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         is_done: false
                     }));
 
-                    const { data: insertedIssues } = await supabase.from('issues').insert(tasksToInsert).select();
+                    const { data: insertedIssues, error: insertError } = await supabase.from('issues').insert(tasksToInsert).select();
+                    if (insertError) {
+                        console.error('Supabase insert error', insertError);
+                        addToast(`Error al guardar tareas: ${insertError.message}`, 'error');
+                        throw insertError;
+                    }
                     if (insertedIssues) {
                         const finalIssues = resultIssues.map(i => {
                             const dbRecord = insertedIssues.find(si => si.external_id === i.id);
@@ -673,8 +688,13 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                             is_done: false
                         }));
 
-                        const { data: insertedIssues } = await supabase.from('issues').insert(tasksToInsert).select();
+                        const { data: insertedIssues, error: insertError } = await supabase.from('issues').insert(tasksToInsert).select();
 
+                        if (insertError) {
+                            console.error('Supabase insert error', insertError);
+                            addToast(`Error al guardar tareas: ${insertError.message}`, 'error');
+                            throw insertError;
+                        }
                         if (insertedIssues) {
                             const finalIssues = resultIssues.map(i => {
                                 const dbRecord = insertedIssues.find(si => si.external_id === i.id);
