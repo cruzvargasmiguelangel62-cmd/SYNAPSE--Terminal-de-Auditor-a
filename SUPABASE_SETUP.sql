@@ -31,9 +31,16 @@ CREATE POLICY "Users can manage their own config"
 -- (Suponiendo que ya existe por el código de MainTerminal)
 
 -- 3. TABLA DE ISSUES (HALLAZGOS)
+-- Nota: la aplicación almacena un `external_id` generado por la IA para
+-- poder correlacionar los registros. Asegúrate de que la tabla tenga esa
+-- columna, de lo contrario las inserciones fallarán con 400 (Bad Request).
+--
+-- Puedes crear la tabla completa o añadir solamente la columna si ya existe.
+--
 -- CREATE TABLE IF NOT EXISTS public.issues (
 --     id BIGSERIAL PRIMARY KEY,
 --     audit_id BIGINT REFERENCES public.audits(id) ON DELETE CASCADE,
+--     external_id INTEGER,                          -- identificador externo de la IA
 --     title TEXT NOT NULL,
 --     description TEXT,
 --     category TEXT,
@@ -42,6 +49,9 @@ CREATE POLICY "Users can manage their own config"
 --     is_done BOOLEAN DEFAULT FALSE,
 --     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 -- );
+--
+-- Si ya tienes `issues` pero te falta `external_id`, ejecútalo:
+-- ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS external_id INTEGER;
 
 -- Habilitar RLS en issues
 -- ALTER TABLE public.issues ENABLE ROW LEVEL SECURITY;

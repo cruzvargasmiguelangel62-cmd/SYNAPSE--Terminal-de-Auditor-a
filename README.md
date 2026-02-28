@@ -71,3 +71,33 @@ las llamadas a la API irán a `https://synapse-terminal-de-auditor-a.onrender.co
 
 Evita dejar el valor por defecto `http://localhost:4000` en producción, ya que
 causa errores de conexión.
+
+## Esquema de la base de datos
+
+El backend usa Supabase para persistir auditorías y hallazgos. La tabla `issues`
+se define con estas columnas:
+
+```sql
+id BIGSERIAL PRIMARY KEY,
+audit_id BIGINT REFERENCES public.audits(id) ON DELETE CASCADE,
+external_id INTEGER,          -- importante: descartes de IA
+title TEXT NOT NULL,
+description TEXT,
+category TEXT,
+severity TEXT,
+fix_plan TEXT,
+is_done BOOLEAN DEFAULT FALSE,
+created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()) NOT NULL
+```
+
+> Si no existe la columna `external_id` el cliente intentará insertarla y
+> Supabase devolverá un **400 Bad Request** (nombre de columna no reconocido).
+> Puedes añadirla ejecutando en el SQL editor de Supabase:
+>
+> ```sql
+> ALTER TABLE public.issues
+>   ADD COLUMN IF NOT EXISTS external_id INTEGER;
+> ```
+
+Con la estructura correcta las operaciones de inserción / lectura funcionarán
+sin errores.
