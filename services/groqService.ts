@@ -23,9 +23,27 @@ const normalizeResponse = (obj: any) => {
     console.error('Formato de respuestas inesperado', obj);
     throw new Error('Formato de respuesta inválido: campo de issues no es arreglo');
   }
+
+  const issues = rawIssues.map((i: any) => {
+    const title = i.title || i.titulo || i.descripcion || i.description || '';
+    const desc = i.desc || i.descripcion || i.detalles || i.detail || '';
+    const category = i.category || i.categoria || undefined;
+    const severity = i.severity || i.prioridad || undefined;
+    const fix = i.fix || i.resolucion || '';
+
+    return {
+      ...i,
+      title,
+      desc,
+      category,
+      severity,
+      fix
+    };
+  });
+
   return {
     summary: obj.summary || obj.resumen || '',
-    issues: rawIssues
+    issues
   } as AnalysisResponse;
 };
 
