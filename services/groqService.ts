@@ -2,9 +2,18 @@ import { AnalysisResponse } from "../types";
 
 const getApiUrl = () => {
   // en producción el frontend y el backend suelen compartir el mismo dominio,
-  // por lo que podemos usar el origen actual como URL base si no se provee
+  // por lo que usamos el origen actual como URL base si no se provee
   // explícitamente una variable de entorno.
-  return import.meta.env.VITE_API_URL || window.location.origin;
+  let base = import.meta.env.VITE_API_URL || window.location.origin;
+
+  // si el valor termina con `/api` o `/api/analyze` lo eliminamos para evitar
+  // duplicaciones cuando construimos las rutas.
+  base = base.replace(/\/(?:api(?:\/analyze)?)$/i, '');
+
+  // quitar barras finales extras
+  base = base.replace(/\/+$/, '');
+
+  return base;
 };
 
 export const analyzeIssuesWithGroq = async (

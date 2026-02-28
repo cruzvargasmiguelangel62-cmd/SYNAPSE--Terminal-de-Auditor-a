@@ -23,7 +23,8 @@ export default function KeepAlive() {
                 // Usamos window.location.origin como respaldo cuando no hay
                 // variable VITE_API_URL configurada (caso típico en despliegues
                 // donde la API sirve también los ficheros estáticos).
-                const apiBaseUrl = import.meta.env.VITE_API_URL || window.location.origin;
+                let apiBaseUrl = import.meta.env.VITE_API_URL || window.location.origin;
+                apiBaseUrl = apiBaseUrl.replace(/\/(?:api(?:\/analyze)?)$/i, '').replace(/\/+$/, '');
                 
                 // Intentamos el endpoint /health que definimos en backend/server.js
                 await fetch(`${apiBaseUrl}/health`, { mode: 'no-cors' }).catch(() => {

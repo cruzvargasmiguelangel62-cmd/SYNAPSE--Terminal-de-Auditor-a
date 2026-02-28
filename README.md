@@ -53,5 +53,13 @@ siguiente:
 
 Si el cliente se carga desde `https://synapse-terminal-de-auditor-a.onrender.com`,
 las llamadas a la API irán a `https://synapse-terminal-de-auditor-a.onrender.com/api/*`.
+
+> **Importante:** la variable `VITE_API_URL` debe contener **solo el origen**
+> (protocolo + dominio + puerto opcional). No añadas el path `/api` ni mucho
+> menos `/api/analyze` porque el código ya concatena esa ruta; de lo contrario
+> terminarás con URLs como
+> `https://.../api/analyze/api/analyze` y recibirás 404/HTML.
+> Puedes ponerla en blanco para que use `window.location.origin`.
+
 Evita dejar el valor por defecto `http://localhost:4000` en producción, ya que
 causa errores de conexión.
