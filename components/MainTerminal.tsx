@@ -479,7 +479,14 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                 console.error('Respuesta de análisis inválida', response);
                 throw new Error('El servidor no devolvió hallazgos válidos');
             }
-            const respIssues: Issue[] = response.issues;
+            let respIssues: Issue[] = response.issues;
+            console.debug('issues recibidos del servidor:', respIssues);
+            const missing = respIssues.filter(i => !i.title && !i.desc).length;
+            if (missing) {
+                console.warn(`${missing} issues sin título ni descripción`, respIssues);
+            }
+            // filtrar entradas totalmente vacías
+            respIssues = respIssues.filter(i => i.title || i.desc);
 
             if (useSystemKey) {
                 const nextCredits = Math.max(0, systemCredits - 1);
@@ -507,7 +514,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         // asegurarnos de que cada hallazgo tiene título
                         .map((i, idx) => {
                             if (!i.title || !i.title.trim()) {
-                                console.warn(`Issue sin título en posición ${idx}, se reemplaza por '(sin título)'`, i);
+                                console.warn(`Issue sin título en posición ${idx}, se reemplaza por '(sin título)'`, JSON.stringify(i, null, 2));
                             }
                             return {
                                 audit_id: currentAuditId,
@@ -632,7 +639,19 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                 console.error('Generación de tareas retornó datos inválidos', result);
                 throw new Error('El servidor no devolvió tareas válidas');
             }
-            const resultIssues: Issue[] = result.issues;
+            let resultIssues: Issue[] = result.issues;
+            console.debug('tareas recibidas del servidor:', resultIssues);
+            const missingTasks = resultIssues.filter(i => !i.title && !i.desc).length;
+            if (missingTasks) {
+                console.warn(`${missingTasks} tareas sin título ni descripción`, resultIssues);
+            }
+            resultIssues = resultIssues.filter(i => i.title || i.desc);
+            console.debug('Respuesta de tareas:', resultIssues);
+            const emptyTasks = resultIssues.filter(i => !i.title && !i.desc).length;
+            if (emptyTasks > 0) {
+                console.warn(`${emptyTasks} tareas sin título ni descripción`, resultIssues);
+            }
+            const filteredTasks = resultIssues.filter(i => i.title || i.desc);
 
             setSummary(result.summary);
 
@@ -649,7 +668,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                     const tasksToInsert = resultIssues
                         .map((i, idx) => {
                             if (!i.title || !i.title.trim()) {
-                                console.warn(`Task sin título en posición ${idx}, se reemplaza por '(sin título)'`, i);
+                                console.warn(`Task sin título en posición ${idx}, se reemplaza por '(sin título)'`, JSON.stringify(i, null, 2));
                             }
                             return {
                                 audit_id: currentAuditId,
@@ -696,7 +715,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         const tasksToInsert = resultIssues
                             .map((i, idx) => {
                                 if (!i.title || !i.title.trim()) {
-                                    console.warn(`Task sin título (nueva auditoría) en posición ${idx}, se reemplaza`, i);
+                                    console.warn(`Task sin título (nueva auditoría) en posición ${idx}, se reemplaza`, JSON.stringify(i, null, 2));
                                 }
                                 return {
                                     audit_id: audit.id,
