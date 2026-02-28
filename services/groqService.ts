@@ -16,6 +16,19 @@ const getApiUrl = () => {
   return base;
 };
 
+const normalizeResponse = (obj: any) => {
+  if (!obj) throw new Error('Respuesta vacía del servidor');
+  const rawIssues = obj.issues || obj.tareas_pendientes || obj.tareas || obj.tasks || [];
+  if (!Array.isArray(rawIssues)) {
+    console.error('Formato de respuestas inesperado', obj);
+    throw new Error('Formato de respuesta inválido: campo de issues no es arreglo');
+  }
+  return {
+    summary: obj.summary || obj.resumen || '',
+    issues: rawIssues
+  } as AnalysisResponse;
+};
+
 export const analyzeIssuesWithGroq = async (
   userInput: string,
   apiKey?: string,
@@ -38,7 +51,8 @@ export const analyzeIssuesWithGroq = async (
       throw new Error(error.error || 'Error en el servidor proxy');
     }
 
-    return await response.json();
+    const data = await response.json();
+    return normalizeResponse(data);
   } catch (error: any) {
     throw new Error(error.message);
   }
@@ -66,7 +80,8 @@ export const generateTasksWithGroq = async (
       throw new Error(error.error || 'Error en el servidor proxy');
     }
 
-    return await response.json();
+    const data = await response.json();
+    return normalizeResponse(data);
   } catch (error: any) {
     throw new Error(error.message);
   }

@@ -62,10 +62,12 @@ las llamadas a la API irán a `https://synapse-terminal-de-auditor-a.onrender.co
 > Puedes ponerla en blanco para que use `window.location.origin`.
 >
 > **Validación de datos:** la aplicación ahora comprueba en tiempo de ejecución
-> que la respuesta de la API incluye un arreglo `issues`. Si el backend devuelve
-> otra cosa (por ejemplo, cuando el modelo falla o genera JSON mal formateado),
-> se mostrará un error controlado en lugar de estrellarse con
-> "Cannot read properties of undefined (reading 'map')".
+> que la respuesta de la API incluye un arreglo `issues`. El servicio también
+> normaliza respuestas que utilicen otras claves (por ejemplo
+> `tareas_pendientes`, `tareas` o `tasks`), ya que el modelo podría devolver
+> nombres en español cuando se le pida generar listas de tareas. Si el backend
+> devuelve algo distinto, se mostrará un error controlado en lugar de estrellarse
+> con "Cannot read properties of undefined (reading 'map')".
 
 Evita dejar el valor por defecto `http://localhost:4000` en producción, ya que
 causa errores de conexión.
