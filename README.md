@@ -68,7 +68,24 @@ las llamadas a la API irán a `https://synapse-terminal-de-auditor-a.onrender.co
 > nombres en español cuando se le pida generar listas de tareas. Si el backend
 > devuelve algo distinto, se mostrará un error controlado en lugar de estrellarse
 > con "Cannot read properties of undefined (reading 'map')".
+>
+> Además, las respuestas de IA que omitan la prioridad o el plan técnico son
+> completadas automáticamente: se mapea cualquier valor de `prioridad`,
+> `gravedad`, `level`, `High`/`Low`, etc. al enum interno (`Alta`, `Media`,
+> `Baja`), y cuando falta información se aplica "Baja" por defecto. El campo de
+> resolución/plan también admite variantes como `resolucion`, `plan_tecnico`,
+> `plan_accion` y, si queda vacío, se mostrará el placeholder
+> "Pendiente de resolución técnica." en la interfaz.
+Cuando se genera una *lista de tareas* (checklist) el prompt del modelo ahora
+solicita expresamente un campo `fix`/`plan_tecnico` para cada ítem. Si el
+modelo sigue devolviendo ítems sin esa información, el cliente los sustituye
+por el texto de placeholder mencionado arriba. Esto explica por qué antes de
+la actualización podía aparecer una tarjeta o fila vacía en "Plan Técnico"; el
+modelo no fue instruido para crearla.
 
+Para ajustar el comportamiento en caso de que tus propios prompts sean
+personalizados, asegúrate de pedir explícitamente la salida JSON con un campo
+"fix" o "plan_tecnico" que contenga la resolución técnica de cada tarea.
 Evita dejar el valor por defecto `http://localhost:4000` en producción, ya que
 causa errores de conexión.
 
