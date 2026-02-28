@@ -463,7 +463,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         setIsAnalyzing(true);
         setError(null);
         try {
-            let response;
+            let response: any;
             const activeKey = useSystemKey ? undefined : (provider === 'gemini' ? customGeminiKey : customGroqKey);
 
             if (provider === 'gemini') {
@@ -473,6 +473,13 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
             } else {
                 throw new Error('Proveedor no válido');
             }
+
+            // validar estructura
+            if (!response || !Array.isArray(response.issues)) {
+                console.error('Respuesta de análisis inválida', response);
+                throw new Error('El servidor no devolvió hallazgos válidos');
+            }
+            const respIssues: Issue[] = response.issues;
 
             if (useSystemKey) {
                 const nextCredits = Math.max(0, systemCredits - 1);
@@ -496,7 +503,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                     // Eliminar hallazgos viejos e insertar los nuevos
                     await supabase.from('issues').delete().eq('audit_id', currentAuditId);
 
-                    const issuesToInsert = response.issues.map(i => ({
+                    const issuesToInsert = respIssues.map(i => ({
                         audit_id: currentAuditId,
                         external_id: i.id,
                         title: i.title,
@@ -510,7 +517,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                     const { data: insertedIssues } = await supabase.from('issues').insert(issuesToInsert).select();
 
                     if (insertedIssues) {
-                        const finalIssues = response.issues.map(i => {
+                        const finalIssues = respIssues.map(i => {
                             const dbRecord = insertedIssues.find(si => si.external_id === i.id);
                             return { ...i, dbId: dbRecord?.id, isDone: false };
                         });
@@ -533,7 +540,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         addToast(`Error al guardar: ${auditError.message}`, "error");
                     } else if (audit) {
                         setCurrentAuditId(audit.id);
-                        const issuesToInsert = response.issues.map(i => ({
+                        const issuesToInsert = respIssues.map(i => ({
                             audit_id: audit.id,
                             external_id: i.id,
                             title: i.title,
@@ -547,7 +554,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         const { data: insertedIssues } = await supabase.from('issues').insert(issuesToInsert).select();
 
                         if (insertedIssues) {
-                            const finalIssues = response.issues.map(i => {
+                            const finalIssues = respIssues.map(i => {
                                 const dbRecord = insertedIssues.find(si => si.external_id === i.id);
                                 return { ...i, dbId: dbRecord?.id, isDone: false };
                             });
@@ -581,7 +588,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         setCurrentAuditId(null);
 
         try {
-            let result;
+            let result: any;
             if (provider === 'groq') {
                 const apiKey = useSystemKey ? undefined : customGroqKey;
                 if (!useSystemKey && !apiKey) throw new Error("API Key de Groq requerida");
@@ -600,6 +607,13 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                 result = await generateTasks(inputText, apiKey);
             }
 
+            // validar la estructura
+            if (!result || !Array.isArray(result.issues)) {
+                console.error('Generación de tareas retornó datos inválidos', result);
+                throw new Error('El servidor no devolvió tareas válidas');
+            }
+            const resultIssues: Issue[] = result.issues;
+
             setSummary(result.summary);
 
             if (supabase && session) {
@@ -612,7 +626,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
 
                     await supabase.from('issues').delete().eq('audit_id', currentAuditId);
 
-                    const tasksToInsert = result.issues.map(i => ({
+                    const tasksToInsert = resultIssues.map(i => ({
                         audit_id: currentAuditId,
                         external_id: i.id,
                         title: i.title,
@@ -625,7 +639,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
 
                     const { data: insertedIssues } = await supabase.from('issues').insert(tasksToInsert).select();
                     if (insertedIssues) {
-                        const finalIssues = result.issues.map(i => {
+                        const finalIssues = resultIssues.map(i => {
                             const dbRecord = insertedIssues.find(si => si.external_id === i.id);
                             return { ...i, dbId: dbRecord?.id, isDone: false };
                         });
@@ -648,7 +662,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         addToast(`Error al guardar: ${auditError.message}`, "error");
                     } else if (audit) {
                         setCurrentAuditId(audit.id);
-                        const tasksToInsert = result.issues.map(i => ({
+                        const tasksToInsert = resultIssues.map(i => ({
                             audit_id: audit.id,
                             external_id: i.id,
                             title: i.title,
@@ -662,7 +676,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         const { data: insertedIssues } = await supabase.from('issues').insert(tasksToInsert).select();
 
                         if (insertedIssues) {
-                            const finalIssues = result.issues.map(i => {
+                            const finalIssues = resultIssues.map(i => {
                                 const dbRecord = insertedIssues.find(si => si.external_id === i.id);
                                 return { ...i, dbId: dbRecord?.id, isDone: false };
                             });

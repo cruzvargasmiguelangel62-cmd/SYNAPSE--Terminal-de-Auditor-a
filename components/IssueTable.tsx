@@ -83,7 +83,7 @@ export const IssueTable: React.FC<IssueTableProps> = ({
         <div>
           <h2 className="text-xl font-semibold text-slate-100 flex items-center gap-2">
             <AlertCircle className="w-5 h-5 text-sky-400" />
-            {issues.length > 0 && issues.every(i => i.isDone) ? (
+            { (issues || []).length > 0 && issues.every(i => i.isDone) ? (
               <span className="text-emerald-400 animate-pulse flex items-center gap-2">
                 <Check className="w-5 h-5" /> LISTA REALIZADA
               </span>
@@ -92,7 +92,7 @@ export const IssueTable: React.FC<IssueTableProps> = ({
             )}
           </h2>
           <p className="text-sm text-slate-500">
-            {issues.length > 0 && issues.every(i => i.isDone)
+            { (issues || []).length > 0 && issues.every(i => i.isDone)
               ? "Todos los requerimientos han sido validados"
               : "Estado de revisión de requerimientos"}
           </p>
@@ -117,7 +117,7 @@ export const IssueTable: React.FC<IssueTableProps> = ({
       {viewMode === 'cards' ? (
         /* --- VISTA DE TARJETAS --- */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {issues.map((issue) => (
+          {(issues || []).map((issue) => (
             <div key={issue.id} className={`bg-slate-900/40 border rounded-2xl p-5 transition-all ${issue.isDone ? 'border-slate-800/60 opacity-60 grayscale-[0.3]' : 'border-indigo-500/30 bg-indigo-500/5 shadow-lg shadow-indigo-500/5 hover:border-indigo-500/50'}`}>
               <div className="flex justify-between items-start mb-4">
                 <span className="text-[10px] font-mono text-slate-500 bg-slate-950 px-2 py-1 rounded border border-slate-800">
@@ -177,7 +177,7 @@ export const IssueTable: React.FC<IssueTableProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/40">
-                {issues.map((issue) => (
+                {(issues || []).map((issue) => (
                   <tr key={issue.id} className={`group transition-colors ${issue.isDone ? 'bg-slate-950/20 opacity-60' : 'bg-indigo-500/5 hover:bg-indigo-500/10'}`}>
                     <td className="pl-6 py-6 align-top no-print">
                       <CustomCheckbox isDone={issue.isDone} onClick={() => onToggleDone(issue.id)} />
