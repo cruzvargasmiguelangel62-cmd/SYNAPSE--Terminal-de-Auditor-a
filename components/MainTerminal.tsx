@@ -578,7 +578,10 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
 
             setSummary(response.summary);
         } catch (err: any) {
-            setError(err.message || "ERROR_SISTEMA: No se pudo completar el análisis.");
+            console.error('Error en handleGenerate:', err);
+            const msg = err?.message || "ERROR_SISTEMA: No se pudo completar el análisis.";
+            setError(msg);
+            addToast(msg, 'error');
         } finally {
             setIsAnalyzing(false);
         }
@@ -709,8 +712,10 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
             }
 
         } catch (err: any) {
-            setError(err.message || 'Error al generar tareas');
-            addToast(err.message || 'Error al generar tareas', "error");
+            console.error('Error en handleGenerateTasks:', err);
+            const msg = err?.message || 'Error al generar tareas';
+            setError(msg);
+            addToast(msg, 'error');
         } finally {
             setIsAnalyzing(false);
             setLoadingMessage("Analizando trazas...");
