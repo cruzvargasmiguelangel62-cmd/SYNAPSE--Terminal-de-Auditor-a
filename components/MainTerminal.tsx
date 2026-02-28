@@ -503,16 +503,23 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                     // Eliminar hallazgos viejos e insertar los nuevos
                     await supabase.from('issues').delete().eq('audit_id', currentAuditId);
 
-                    const issuesToInsert = respIssues.map(i => ({
-                        audit_id: currentAuditId,
-                        external_id: i.id,
-                        title: i.title,
-                        description: i.desc,
-                        category: i.category,
-                        severity: i.severity,
-                        fix_plan: i.fix,
-                        is_done: false
-                    }));
+                    const issuesToInsert = respIssues
+                        // asegurarnos de que cada hallazgo tiene título
+                        .map((i, idx) => {
+                            if (!i.title || !i.title.trim()) {
+                                console.warn(`Issue sin título en posición ${idx}, se reemplaza por '(sin título)'`, i);
+                            }
+                            return {
+                                audit_id: currentAuditId,
+                                external_id: i.id,
+                                title: i.title && i.title.trim() ? i.title : '(sin título)',
+                                description: i.desc,
+                                category: i.category,
+                                severity: i.severity,
+                                fix_plan: i.fix,
+                                is_done: false
+                            };
+                        });
 
                     const { data: insertedIssues, error: insertError } = await supabase.from('issues').insert(issuesToInsert).select();
                     if (insertError) {
@@ -639,16 +646,22 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
 
                     await supabase.from('issues').delete().eq('audit_id', currentAuditId);
 
-                    const tasksToInsert = resultIssues.map(i => ({
-                        audit_id: currentAuditId,
-                        external_id: i.id,
-                        title: i.title,
-                        description: i.desc,
-                        category: i.category,
-                        severity: i.severity,
-                        fix_plan: i.fix,
-                        is_done: false
-                    }));
+                    const tasksToInsert = resultIssues
+                        .map((i, idx) => {
+                            if (!i.title || !i.title.trim()) {
+                                console.warn(`Task sin título en posición ${idx}, se reemplaza por '(sin título)'`, i);
+                            }
+                            return {
+                                audit_id: currentAuditId,
+                                external_id: i.id,
+                                title: i.title && i.title.trim() ? i.title : '(sin título)',
+                                description: i.desc,
+                                category: i.category,
+                                severity: i.severity,
+                                fix_plan: i.fix,
+                                is_done: false
+                            };
+                        });
 
                     const { data: insertedIssues, error: insertError } = await supabase.from('issues').insert(tasksToInsert).select();
                     if (insertError) {
@@ -680,16 +693,22 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         addToast(`Error al guardar: ${auditError.message}`, "error");
                     } else if (audit) {
                         setCurrentAuditId(audit.id);
-                        const tasksToInsert = resultIssues.map(i => ({
-                            audit_id: audit.id,
-                            external_id: i.id,
-                            title: i.title,
-                            description: i.desc,
-                            category: i.category,
-                            severity: i.severity,
-                            fix_plan: i.fix,
-                            is_done: false
-                        }));
+                        const tasksToInsert = resultIssues
+                            .map((i, idx) => {
+                                if (!i.title || !i.title.trim()) {
+                                    console.warn(`Task sin título (nueva auditoría) en posición ${idx}, se reemplaza`, i);
+                                }
+                                return {
+                                    audit_id: audit.id,
+                                    external_id: i.id,
+                                    title: i.title && i.title.trim() ? i.title : '(sin título)',
+                                    description: i.desc,
+                                    category: i.category,
+                                    severity: i.severity,
+                                    fix_plan: i.fix,
+                                    is_done: false
+                                };
+                            });
 
                         const { data: insertedIssues, error: insertError } = await supabase.from('issues').insert(tasksToInsert).select();
 
