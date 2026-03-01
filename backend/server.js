@@ -36,7 +36,7 @@ Tu misión es transformar descripciones de lenguaje natural en una lista estruct
 2. Identifica verbos de acción y contextos técnicos.
 3. Clasifica cada tarea obligatoriamente en: 'UI/UX', 'Backend', 'Datos', 'Seguridad', 'Rendimiento'.
 4. Asigna prioridad (Severity) basada en la urgencia o importancia del contexto (ej: seguridad/crítico -> Alta).
-5. Para cada tarea incluye campos claramente nombrados: `title` (resumen breve), `desc` (detalle del trabajo), una breve `fix` o `plan_tecnico` con la sugerencia de resolución técnica y, si aplica, `category` y `severity`.
+5. Para cada tarea incluye campos claramente nombrados: \`title\` (resumen breve), \`desc\` (detalle del trabajo), una breve \`fix\` o \`plan_tecnico\` con la sugerencia de resolución técnica y, si aplica, \`category\` y \`severity\`.
 6. Estructura de salida JSON.
 RESPONDE SIEMPRE EN ESPAÑOL.`;
 
