@@ -134,6 +134,25 @@ personalizados, asegúrate de pedir explícitamente la salida JSON con un campo
 Evita dejar el valor por defecto `http://localhost:4000` en producción, ya que
 causa errores de conexión.
 
+---
+
+## Integraciones (GitHub / Trello)
+
+Los campos que ves en el panel de configuración **no se guardan automáticamente**
+cuando los escribes; debes pulsar el botón **"Guardar en Bóveda Segura"**. Si
+tu sesión de Supabase está activa, los valores se almacenan en la tabla
+`user_configs` y volverán cuando recargues la página. Si no estás autenticado,
+la aplicación igualmente recuerda la configuración usando `localStorage` del
+navegador, de modo que no desaparece al refrescar.
+
+En cualquier caso, los valores solo se envían al servidor cuando clicas el
+botón; verifica que has guardado antes de cerrar la pestaña.
+
+Por supuesto, para que la opción de guardar en servidor funcione necesitas
+estar logueado (correo/contraseña) y tener una instancia de Supabase conectada.
+Sin login, solo funcionará el almacenamiento local.
+
+
 ## Esquema de la base de datos
 
 El backend usa Supabase para persistir auditorías y hallazgos. La tabla `issues`
