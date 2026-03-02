@@ -80,6 +80,19 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         if (isDbConnected && session) {
             fetchRecentAudits();
             fetchUserConfig();
+        } else {
+            // sin sesión o sin DB, también intentamos cargar desde localStorage
+            const owner = localStorage.getItem('gh_owner');
+            if (owner) {
+                setGithubOwner(owner);
+                setGithubRepo(localStorage.getItem('gh_repo') || '');
+                setGithubToken(localStorage.getItem('gh_token') || '');
+                setTrelloKey(localStorage.getItem('trello_key') || '');
+                setTrelloToken(localStorage.getItem('trello_token') || '');
+                setTrelloListId(localStorage.getItem('trello_list_id') || '');
+                setCustomGeminiKey(localStorage.getItem('gemini_key') || '');
+                setCustomGroqKey(localStorage.getItem('groq_key') || '');
+            }
         }
     }, [isDbConnected, session]);
 
@@ -130,15 +143,28 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
             updated_at: new Date()
         };
 
-        const { error } = await supabase
-            .from('user_configs')
-            .upsert(config, { onConflict: 'user_id' });
+        // guardar en Supabase si hay sesión
+        if (supabase && session) {
+            const { error } = await supabase
+                .from('user_configs')
+                .upsert(config, { onConflict: 'user_id' });
 
-        if (error) {
-            addToast(`Error al guardar: ${error.message}`, "error");
-        } else {
-            addToast("Configuración guardada de forma segura", "success");
+            if (error) {
+                addToast(`Error al guardar en servidor: ${error.message}`, "error");
+            } else {
+                addToast("Configuración guardada de forma segura", "success");
+            }
         }
+
+        // siempre guardamos en localStorage para persistencia offline
+        localStorage.setItem('gh_owner', githubOwner);
+        localStorage.setItem('gh_repo', githubRepo);
+        localStorage.setItem('gh_token', githubToken);
+        localStorage.setItem('trello_key', trelloKey);
+        localStorage.setItem('trello_token', trelloToken);
+        localStorage.setItem('trello_list_id', trelloListId);
+        localStorage.setItem('gemini_key', customGeminiKey);
+        localStorage.setItem('groq_key', customGroqKey);
     };
 
     const handleVerifyGitHub = async () => {
