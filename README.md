@@ -75,8 +75,15 @@ las llamadas a la API irán a `https://synapse-terminal-de-auditor-a.onrender.co
 > `Baja`), y cuando falta información se aplica "Baja" por defecto. El campo de
 > resolución/plan también admite variantes como `resolucion`, `plan_tecnico`,
 > `plan_accion` y, si queda vacío, se mostrará el placeholder
-> "Pendiente de resolución técnica." en la interfaz.
-Cuando se genera una *lista de tareas* (checklist) el prompt del modelo ahora
+> "Pendiente de resolución técnica." en la interfaz.> 
+> **NORMALIZACIÓN EN EL BACKEND.** Como refuerzo adicional, el proxy de
+> servidor (endpoint `/api/analyze`) ahora reescribe la respuesta devuelta por
+> Gemini/Groq antes de reenviarla al cliente; cualquier hallazgo sin `title`,
+> `desc` o `fix` recibe valores por defecto (`[sin título]`,
+> `[sin descripción]`, cadena vacía para `fix`) para evitar filas vacías y
+> facilitar la depuración (los logs mostraran el JSON original si el modelo
+> falla).
+> Cuando se genera una *lista de tareas* (checklist) el prompt del modelo ahora
 solicita expresamente un campo `fix`/`plan_tecnico` para cada ítem. Si el
 modelo sigue devolviendo ítems sin esa información, el cliente los sustituye
 por el texto de placeholder mencionado arriba. Esto explica por qué antes de

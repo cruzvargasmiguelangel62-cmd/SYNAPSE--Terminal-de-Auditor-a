@@ -34,8 +34,8 @@ const normalizeResponse = (obj: any) => {
   }
 
   const issues = rawIssues.map((i: any) => {
-    const title = i.title || i.titulo || i.descripcion || i.description || '';
-    const desc = i.desc || i.descripcion || i.detalles || i.detail || '';
+    const title = i.title || i.titulo || i.descripcion || i.description || '[sin título]';
+    const desc = i.desc || i.descripcion || i.detalles || i.detail || '[sin descripción]';
     const category = i.category || i.categoria || undefined;
     const fix = i.fix || i.resolucion || i.plan_tecnico || i.plan_accion || i.plan || '';
     const rawSeverity = i.severity || i.prioridad || i.gravedad || i.level || undefined;

@@ -36,7 +36,7 @@ Tu misión es transformar descripciones de lenguaje natural en una lista estruct
 2. Identifica verbos de acción y contextos técnicos.
 3. Clasifica cada tarea obligatoriamente en: 'UI/UX', 'Backend', 'Datos', 'Seguridad', 'Rendimiento'.
 4. Asigna prioridad (Severity) basada en la urgencia o importancia del contexto (ej: seguridad/crítico -> Alta).
-5. Para cada tarea incluye campos claramente nombrados: \`title\` (resumen breve), \`desc\` (detalle del trabajo), una breve \`fix\` o \`plan_tecnico\` con la sugerencia de resolución técnica y, si aplica, \`category\` y \`severity\`.
+5. Para cada tarea incluye campos claramente nombrados: 'title' (resumen breve), 'desc' (detalle del trabajo), una breve 'fix' o 'plan_tecnico' con la sugerencia de resolución técnica y, si aplica, 'category' y 'severity'.
 6. Estructura de salida JSON.
 RESPONDE SIEMPRE EN ESPAÑOL.`;
 
@@ -65,12 +65,33 @@ app.post('/api/analyze', async (req, res) => {
       // Limpiar markdown si Gemini lo envía
       text = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
-      res.json(JSON.parse(text));
+      // parsear y normalizar para asegurar campos mínimos
+      const parsed = JSON.parse(text);
+      if (parsed && Array.isArray(parsed.issues)) {
+        parsed.issues = parsed.issues.map(i => {
+          const title = i.title || i.titulo || i.descripcion || i.description || '[sin título]';
+          const desc = i.desc || i.descripcion || i.detalles || i.detail || '[sin descripción]';
+          const fix = i.fix || i.resolucion || i.plan_tecnico || i.plan_accion || i.plan || '';
+          const rawSeverity = i.severity || i.prioridad || i.gravedad || i.level || 'Baja';
+          return {
+            ...i,
+            title,
+            desc,
+            fix,
+            severity: rawSeverity
+          };
+        });
+      }
+
+      res.json(parsed);
 
     } else if (provider === 'groq') {
       if (!groqKey) return res.status(400).json({ error: 'Falta Groq API Key' });
 
-      const systemPrompt = isTask ? "Eres un Gestor de Tareas experto. Transforma la entrada en una lista de tareas pendientes. Responde SOLO con JSON." : "Eres un Auditor de Software Senior. Analiza el reporte y devuelve un JSON estructurado. Responde en Español.";
+      // para mantener consistencia, reutilizamos las mismas instrucciones que
+      // usamos con Gemini; de este modo ambos proveedores reciben el mismo
+      // contexto detallado y es más fácil ajustar el prompt en un único lugar.
+      const systemPrompt = isTask ? TASK_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION;
 
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
@@ -84,6 +105,10 @@ app.post('/api/analyze', async (req, res) => {
             { role: "system", content: systemPrompt },
             { role: "user", content: input }
           ],
+          // el tipo 'json_object' ya nos obliga a recibir JSON válido, pero
+          // también podríamos añadir un esquema si se necesitara validar
+          // campos concretos. Por ahora las instrucciones del systemPrompt
+          // piden explícitamente title/desc/severity/fix/category.
           response_format: { type: "json_object" },
           temperature: 0.1
         })
