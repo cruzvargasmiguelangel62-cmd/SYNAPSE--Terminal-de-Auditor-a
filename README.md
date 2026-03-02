@@ -83,12 +83,50 @@ las llamadas a la API irán a `https://synapse-terminal-de-auditor-a.onrender.co
 > `[sin descripción]`, cadena vacía para `fix`) para evitar filas vacías y
 > facilitar la depuración (los logs mostraran el JSON original si el modelo
 > falla).
+
+> **ESQUEMA RIGUROSO.** Para Groq se incluye un `json_schema` en la petición
+> (`response_format`) que obliga al modelo a devolver un objeto con:
+> `summary` (string opcional) y un arreglo `issues` cuyo cada elemento tenga
+> `title`, `desc`, `severity` y `fix` como cadenas. Si la respuesta no cumple,
+> la llamada falla y el backend puede reintentar o avisar al usuario.
+>
+> **EJEMPLOS EN EL PROMPT.** Ambos `SYSTEM_INSTRUCTION` (`QA` y `TASKS`) ahora
+> contienen ejemplos concretos de entrada/salida como guía; esto mejora mucho
+> la calidad de salida y reduce respuestas vagas. Aquí tienes un fragmento de
+> ejemplo:
+>
+> ```
+> Entrada: "Al guardar el formulario de pago, la opción de tarjeta desaparece y el servidor devuelve 500."
+> Salida JSON:
+> {
+>   "summary": "Error en el formulario de pago provoca excepción 500",
+>   "issues": [
+>     {
+>       "title": "Campo tarjeta se oculta inesperadamente",
+>       "desc": "El dropdown de tarjeta se borra al pulsar guardar, impidiendo completar la transacción y generando un error 500.",
+>       "category": "Frontend",
+>       "severity": "Alta",
+>       "fix": "Investigar el evento de submit y corregir la condición que oculta el elemento; añadir test de interfaz."
+>     }
+>   ]
+> }
+> ```
+>
+> Ajusta esos ejemplos a tu dominio para entrenar al modelo con tus patrones.
+>
 > Cuando se genera una *lista de tareas* (checklist) el prompt del modelo ahora
-solicita expresamente un campo `fix`/`plan_tecnico` para cada ítem. Si el
-modelo sigue devolviendo ítems sin esa información, el cliente los sustituye
-por el texto de placeholder mencionado arriba. Esto explica por qué antes de
-la actualización podía aparecer una tarjeta o fila vacía en "Plan Técnico"; el
-modelo no fue instruido para crearla.
+solicita expresamente un campo `fix`/`plan_tecnico` para cada ítem y también
+un breve `summary` o `resumen` general del conjunto. El servidor añade esta
+exigencia al `TASK_SYSTEM_INSTRUCTION` y, si la IA no entrega ningún texto,
+el backend se rellena con `[sin resumen]` y el cliente muestra `(sin resumen)`
+en la interfaz. La tarjeta de auditoría guarda además el prefijo
+`[TAREAS]` concatenado con el resumen efectivo, evitando cartas del tipo
+`[TAREAS] ` vacías.
+
+Si el modelo sigue devolviendo ítems sin esa información, el cliente los sustit
+uye por el texto de placeholder mencionado arriba. Esto explica por qué antes
+de la actualización podía aparecer una tarjeta o fila vacía en "Plan Técnico";
+el modelo no fue instruido para crearla.
 
 Para ajustar el comportamiento en caso de que tus propios prompts sean
 personalizados, asegúrate de pedir explícitamente la salida JSON con un campo
