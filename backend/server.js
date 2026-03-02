@@ -34,10 +34,11 @@ const TASK_SYSTEM_INSTRUCTION = `Eres el gestor de incidentes SYNAPSE // TASKS.
 Tu misión es transformar descripciones de lenguaje natural en una lista estructurada de tareas técnicas pendientes (To-Do List).
 1. Analiza el texto entrada buscando intenciones, pendientes y requerimientos.
 2. Identifica verbos de acción y contextos técnicos.
-3. Clasifica cada tarea obligatoriamente en: 'UI/UX', 'Backend', 'Datos', 'Seguridad', 'Rendimiento'.
-4. Asigna prioridad (Severity) basada en la urgencia o importancia del contexto (ej: seguridad/crítico -> Alta).
-5. Para cada tarea incluye campos claramente nombrados: 'title' (resumen breve), 'desc' (detalle del trabajo), una breve 'fix' o 'plan_tecnico' con la sugerencia de resolución técnica y, si aplica, 'category' y 'severity'.
-6. Estructura de salida JSON.
+3. Añade al menos un "summary" o "resumen" general de las tareas que explique su propósito.
+4. Clasifica cada tarea obligatoriamente en: 'UI/UX', 'Backend', 'Datos', 'Seguridad', 'Rendimiento'.
+5. Asigna prioridad (Severity) basada en la urgencia o importancia del contexto (ej: seguridad/crítico -> Alta).
+6. Para cada tarea incluye campos claramente nombrados: 'title' (resumen breve), 'desc' (detalle del trabajo), una breve 'fix' o 'plan_tecnico' con la sugerencia de resolución técnica y, si aplica, 'category' y 'severity'.
+7. Estructura de salida JSON e incluye el campo "issues" con el arreglo de tareas y "summary" con el texto principal.
 RESPONDE SIEMPRE EN ESPAÑOL.`;
 
 // Endpoint de análisis de issues
@@ -67,22 +68,25 @@ app.post('/api/analyze', async (req, res) => {
 
       // parsear y normalizar para asegurar campos mínimos
       const parsed = JSON.parse(text);
-      if (parsed && Array.isArray(parsed.issues)) {
-        parsed.issues = parsed.issues.map((i, idx) => {
-          const id = i.id || i.ID || i.external_id || idx + 1;
-          const title = i.title || i.titulo || i.descripcion || i.description || '[sin título]';
-          const desc = i.desc || i.descripcion || i.detalles || i.detail || '[sin descripción]';
-          const fix = i.fix || i.resolucion || i.plan_tecnico || i.plan_accion || i.plan || '';
-          const rawSeverity = i.severity || i.prioridad || i.gravedad || i.level || 'Baja';
-          return {
-            ...i,
-            id,
-            title,
-            desc,
-            fix,
-            severity: rawSeverity
-          };
-        });
+if (parsed) {
+        parsed.summary = parsed.summary || parsed.resumen || '[sin resumen]';
+        if (Array.isArray(parsed.issues)) {
+          parsed.issues = parsed.issues.map((i, idx) => {
+            const id = i.id || i.ID || i.external_id || idx + 1;
+            const title = i.title || i.titulo || i.descripcion || i.description || '[sin título]';
+            const desc = i.desc || i.descripcion || i.detalles || i.detail || '[sin descripción]';
+            const fix = i.fix || i.resolucion || i.plan_tecnico || i.plan_accion || i.plan || '';
+            const rawSeverity = i.severity || i.prioridad || i.gravedad || i.level || 'Baja';
+            return {
+              ...i,
+              id,
+              title,
+              desc,
+              fix,
+              severity: rawSeverity
+            };
+          });
+        }
       }
 
       res.json(parsed);

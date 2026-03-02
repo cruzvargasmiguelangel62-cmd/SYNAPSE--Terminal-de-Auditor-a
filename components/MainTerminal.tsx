@@ -653,13 +653,16 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
             }
             const filteredTasks = resultIssues.filter(i => i.title || i.desc);
 
-            setSummary(result.summary);
+            // some providers/models may not return a summary for task lists
+            // así que garantizamos un valor legible.
+            const displaySummary = result.summary && result.summary.trim() ? result.summary : '(sin resumen)';
+            setSummary(displaySummary);
 
             if (supabase && session) {
                 if (currentAuditId) {
                     // ACTUALIZAR TAREAS EXISTENTES
                     await supabase.from('audits').update({
-                        summary: `[TAREAS] ${result.summary}`,
+                        summary: `[TAREAS] ${displaySummary}`,
                         input_text: inputText
                     }).eq('id', currentAuditId);
 
