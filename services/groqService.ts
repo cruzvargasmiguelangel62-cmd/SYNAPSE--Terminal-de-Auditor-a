@@ -33,7 +33,8 @@ const normalizeResponse = (obj: any) => {
     throw new Error('Formato de respuesta inválido: campo de issues no es arreglo');
   }
 
-  const issues = rawIssues.map((i: any) => {
+  const issues = rawIssues.map((i: any, idx: number) => {
+    const id = i.id || i.ID || i.external_id || idx + 1;
     const title = i.title || i.titulo || i.descripcion || i.description || '[sin título]';
     const desc = i.desc || i.descripcion || i.detalles || i.detail || '[sin descripción]';
     const category = i.category || i.categoria || undefined;
@@ -42,6 +43,7 @@ const normalizeResponse = (obj: any) => {
 
     return {
       ...i,
+      id,
       title,
       desc,
       category,

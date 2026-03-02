@@ -68,13 +68,15 @@ app.post('/api/analyze', async (req, res) => {
       // parsear y normalizar para asegurar campos mínimos
       const parsed = JSON.parse(text);
       if (parsed && Array.isArray(parsed.issues)) {
-        parsed.issues = parsed.issues.map(i => {
+        parsed.issues = parsed.issues.map((i, idx) => {
+          const id = i.id || i.ID || i.external_id || idx + 1;
           const title = i.title || i.titulo || i.descripcion || i.description || '[sin título]';
           const desc = i.desc || i.descripcion || i.detalles || i.detail || '[sin descripción]';
           const fix = i.fix || i.resolucion || i.plan_tecnico || i.plan_accion || i.plan || '';
           const rawSeverity = i.severity || i.prioridad || i.gravedad || i.level || 'Baja';
           return {
             ...i,
+            id,
             title,
             desc,
             fix,
