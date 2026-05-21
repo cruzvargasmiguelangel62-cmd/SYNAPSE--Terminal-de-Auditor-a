@@ -1,6 +1,8 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@source "./index.html";
+@source "./index.tsx";
+@source "./App.tsx";
+@source "./components/**/*.{js,ts,jsx,tsx}";
 
 /* Estilos personalizados del proyecto */
 :root {

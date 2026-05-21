@@ -57,3 +57,134 @@ CREATE POLICY "Users can manage their own config"
 -- ALTER TABLE public.issues ENABLE ROW LEVEL SECURITY;
 
 -- Nota: Ejecute esto en el SQL Editor de Supabase
+
+-- 4. COLABORACIÓN DE AUDITORÍAS
+-- Permite compartir una auditoría por correo con otros usuarios autenticados.
+
+CREATE TABLE IF NOT EXISTS public.audit_collaborators (
+    id BIGSERIAL PRIMARY KEY,
+    audit_id BIGINT REFERENCES public.audits(id) ON DELETE CASCADE NOT NULL,
+    owner_user_id UUID REFERENCES auth.users NOT NULL,
+    owner_email TEXT NOT NULL,
+    invited_email TEXT NOT NULL,
+    access_level TEXT NOT NULL DEFAULT 'editor' CHECK (access_level IN ('editor', 'viewer')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    UNIQUE (audit_id, invited_email)
+);
+
+ALTER TABLE public.audit_collaborators ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Owners can manage collaborators"
+    ON public.audit_collaborators
+    FOR ALL
+    USING (auth.uid() = owner_user_id)
+    WITH CHECK (auth.uid() = owner_user_id);
+
+CREATE POLICY "Invited users can read their collaboration rows"
+    ON public.audit_collaborators
+    FOR SELECT
+    USING (lower(invited_email) = lower(auth.jwt() ->> 'email'));
+
+-- 5. POLÍTICAS DE ACCESO COMPARTIDO PARA AUDITORÍAS
+-- Ajusta o crea políticas equivalentes si ya tienes otras definidas.
+
+ALTER TABLE public.audits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.issues ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Owners can manage own audits"
+    ON public.audits
+    FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Collaborators can read shared audits"
+    ON public.audits
+    FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM public.audit_collaborators ac
+            WHERE ac.audit_id = audits.id
+              AND lower(ac.invited_email) = lower(auth.jwt() ->> 'email')
+        )
+    );
+
+CREATE POLICY "Collaborators can update shared audits"
+    ON public.audits
+    FOR UPDATE
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM public.audit_collaborators ac
+            WHERE ac.audit_id = audits.id
+              AND lower(ac.invited_email) = lower(auth.jwt() ->> 'email')
+              AND ac.access_level = 'editor'
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1
+            FROM public.audit_collaborators ac
+            WHERE ac.audit_id = audits.id
+              AND lower(ac.invited_email) = lower(auth.jwt() ->> 'email')
+              AND ac.access_level = 'editor'
+        )
+    );
+
+CREATE POLICY "Owners and collaborators can read issues"
+    ON public.issues
+    FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM public.audits a
+            WHERE a.id = issues.audit_id
+              AND (
+                a.user_id = auth.uid()
+                OR EXISTS (
+                    SELECT 1
+                    FROM public.audit_collaborators ac
+                    WHERE ac.audit_id = a.id
+                      AND lower(ac.invited_email) = lower(auth.jwt() ->> 'email')
+                )
+              )
+        )
+    );
+
+CREATE POLICY "Owners and editor collaborators can modify issues"
+    ON public.issues
+    FOR ALL
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM public.audits a
+            WHERE a.id = issues.audit_id
+              AND (
+                a.user_id = auth.uid()
+                OR EXISTS (
+                    SELECT 1
+                    FROM public.audit_collaborators ac
+                    WHERE ac.audit_id = a.id
+                      AND lower(ac.invited_email) = lower(auth.jwt() ->> 'email')
+                      AND ac.access_level = 'editor'
+                )
+              )
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1
+            FROM public.audits a
+            WHERE a.id = issues.audit_id
+              AND (
+                a.user_id = auth.uid()
+                OR EXISTS (
+                    SELECT 1
+                    FROM public.audit_collaborators ac
+                    WHERE ac.audit_id = a.id
+                      AND lower(ac.invited_email) = lower(auth.jwt() ->> 'email')
+                      AND ac.access_level = 'editor'
+                )
+              )
+        )
+    );

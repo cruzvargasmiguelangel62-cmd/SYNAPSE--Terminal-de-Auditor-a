@@ -15,6 +15,28 @@ interface MainTerminalProps {
     session: Session;
 }
 
+interface AuditRecord {
+    id: string | number;
+    summary: string;
+    created_at: string;
+    input_text?: string;
+    raw_input?: string;
+    issues?: any[];
+    isCompleted: boolean;
+    totalIssues: number;
+    completedIssues: number;
+    isOwner: boolean;
+    accessLevel: 'owner' | 'editor' | 'viewer';
+    ownerEmail: string;
+    sharedWithMe?: boolean;
+}
+
+interface AuditCollaborator {
+    invited_email: string;
+    access_level: 'editor' | 'viewer';
+    created_at?: string;
+}
+
 export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
     const [provider, setProvider] = useState<Provider>(() => {
         return (localStorage.getItem('selected_provider') as Provider) || 'gemini';
@@ -49,11 +71,15 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
     });
     const [showApiConfig, setShowApiConfig] = useState(false);
     const [groqKeyError, setGroqKeyError] = useState<string | null>(null);
-    const [recentAudits, setRecentAudits] = useState<any[]>([]);
+    const [recentAudits, setRecentAudits] = useState<AuditRecord[]>([]);
     const [currentAuditId, setCurrentAuditId] = useState<string | null>(null);
+    const [currentAuditMeta, setCurrentAuditMeta] = useState<AuditRecord | null>(null);
     const [tableCopied, setTableCopied] = useState(false);
     const [allCopied, setAllCopied] = useState(false);
     const [auditToDelete, setAuditToDelete] = useState<number | null>(null);
+    const [collaboratorEmail, setCollaboratorEmail] = useState('');
+    const [currentCollaborators, setCurrentCollaborators] = useState<AuditCollaborator[]>([]);
+    const [isSharingAudit, setIsSharingAudit] = useState(false);
 
     const [showGHToken, setShowGHToken] = useState(false);
     const [showTrelloKey, setShowTrelloKey] = useState(false);
@@ -65,6 +91,9 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const isDbConnected = !!supabase;
+    const currentUserEmail = session.user.email?.trim().toLowerCase() || '';
+    const canManageCollaborators = !!currentAuditMeta?.isOwner;
+    const canDeleteCurrentAudit = !!currentAuditMeta?.isOwner;
 
     const [loadingMessage, setLoadingMessage] = useState('Analizando trazas...');
     const messages = [
@@ -107,6 +136,50 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         }
         return () => clearInterval(interval);
     }, [isAnalyzing]);
+
+    useEffect(() => {
+        if (!currentAuditId) return;
+        const refreshedAudit = recentAudits.find(a => String(a.id) === String(currentAuditId));
+        if (refreshedAudit) {
+            setCurrentAuditMeta(refreshedAudit);
+        }
+    }, [recentAudits, currentAuditId]);
+
+    const mapAuditWithStatus = (audit: any, overrides?: Partial<AuditRecord>): AuditRecord => {
+        const totalIssues = audit.issues?.length || 0;
+        const completedIssues = audit.issues?.filter((i: any) => i.is_done).length || 0;
+
+        return {
+            ...audit,
+            isCompleted: totalIssues > 0 && totalIssues === completedIssues,
+            totalIssues,
+            completedIssues,
+            isOwner: true,
+            accessLevel: 'owner',
+            ownerEmail: currentUserEmail,
+            ...overrides,
+        };
+    };
+
+    const fetchCurrentAuditCollaborators = async (auditId: string | number) => {
+        if (!supabase) return;
+
+        const { data, error } = await supabase
+            .from('audit_collaborators')
+            .select('invited_email, access_level, created_at')
+            .eq('audit_id', auditId)
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            if (!error.message.toLowerCase().includes('audit_collaborators')) {
+                console.error('Error al cargar colaboradores:', error);
+            }
+            setCurrentCollaborators([]);
+            return;
+        }
+
+        setCurrentCollaborators((data || []) as AuditCollaborator[]);
+    };
 
     const fetchUserConfig = async () => {
         if (!supabase || !session) return;
@@ -203,7 +276,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
     const fetchRecentAudits = async () => {
         if (!supabase || !session) return;
         try {
-            const { data, error } = await supabase
+            const { data: ownAudits, error: ownError } = await supabase
                 .from('audits')
                 .select(`
           *,
@@ -213,24 +286,64 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         `)
                 .eq('user_id', session.user.id)
                 .order('created_at', { ascending: false })
-                .limit(8);
+                .limit(12);
 
-            if (error) {
-                console.error("Error al cargar historial:", error);
-                addToast(`Error al cargar historial: ${error.message}`, "error");
-            } else {
-                const auditsWithStatus = (data || []).map(audit => {
-                    const totalIssues = audit.issues?.length || 0;
-                    const completedIssues = audit.issues?.filter((i: any) => i.is_done).length || 0;
-                    return {
-                        ...audit,
-                        isCompleted: totalIssues > 0 && totalIssues === completedIssues,
-                        totalIssues,
-                        completedIssues
-                    };
-                });
-                setRecentAudits(auditsWithStatus);
+            if (ownError) {
+                console.error("Error al cargar historial:", ownError);
+                addToast(`Error al cargar historial: ${ownError.message}`, "error");
+                return;
             }
+
+            const normalizedOwnAudits = (ownAudits || []).map(audit => mapAuditWithStatus(audit));
+
+            let normalizedSharedAudits: AuditRecord[] = [];
+
+            if (currentUserEmail) {
+                const { data: shareRows, error: sharesError } = await supabase
+                    .from('audit_collaborators')
+                    .select('audit_id, owner_email, access_level, invited_email')
+                    .eq('invited_email', currentUserEmail)
+                    .limit(20);
+
+                if (sharesError) {
+                    if (!sharesError.message.toLowerCase().includes('audit_collaborators')) {
+                        console.error("Error al cargar colaboraciones:", sharesError);
+                        addToast(`No se pudieron cargar auditorías compartidas: ${sharesError.message}`, "warning");
+                    }
+                } else if (shareRows && shareRows.length > 0) {
+                    const sharedAuditIds = shareRows.map((row: any) => row.audit_id);
+                    const { data: sharedAudits, error: sharedError } = await supabase
+                        .from('audits')
+                        .select(`
+              *,
+              issues (
+                is_done
+              )
+            `)
+                        .in('id', sharedAuditIds);
+
+                    if (sharedError) {
+                        console.error("Error al cargar auditorías compartidas:", sharedError);
+                        addToast(`No se pudieron abrir las auditorías compartidas: ${sharedError.message}`, "warning");
+                    } else {
+                        normalizedSharedAudits = (sharedAudits || []).map((audit: any) => {
+                            const share = shareRows.find((row: any) => String(row.audit_id) === String(audit.id));
+                            return mapAuditWithStatus(audit, {
+                                isOwner: false,
+                                accessLevel: (share?.access_level as 'editor' | 'viewer') || 'editor',
+                                ownerEmail: share?.owner_email || 'equipo',
+                                sharedWithMe: true,
+                            });
+                        });
+                    }
+                }
+            }
+
+            const combinedAudits = [...normalizedOwnAudits, ...normalizedSharedAudits]
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                .slice(0, 16);
+
+            setRecentAudits(combinedAudits);
         } catch (e: any) {
             console.error("Excepción al cargar historial", e);
             addToast("Excepción al conectar con la base de datos", "error");
@@ -585,6 +698,12 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         addToast(`Error al guardar: ${auditError.message}`, "error");
                     } else if (audit) {
                         setCurrentAuditId(audit.id);
+                        setCurrentAuditMeta({
+                            ...mapAuditWithStatus(audit),
+                            id: audit.id,
+                            summary: response.summary,
+                        });
+                        setCurrentCollaborators([]);
                         const issuesToInsert = respIssues.map(i => ({
                             audit_id: audit.id,
                             external_id: i.id,
@@ -639,6 +758,8 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         setSummary('');
         setIssues([]);
         setCurrentAuditId(null);
+        setCurrentAuditMeta(null);
+        setCurrentCollaborators([]);
 
         try {
             let result: any;
@@ -741,6 +862,12 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         addToast(`Error al guardar: ${auditError.message}`, "error");
                     } else if (audit) {
                         setCurrentAuditId(audit.id);
+                        setCurrentAuditMeta({
+                            ...mapAuditWithStatus(audit),
+                            id: audit.id,
+                            summary: `[TAREAS] ${result.summary}`,
+                        });
+                        setCurrentCollaborators([]);
                         const tasksToInsert = resultIssues
                             .map((i, idx) => {
                                 if (!i.title || !i.title.trim()) {
@@ -793,6 +920,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         if (!supabase) return;
         setIsAnalyzing(true);
         setCurrentAuditId(audit.id);
+        setCurrentAuditMeta(audit as AuditRecord);
         try {
             let finalIssues: Issue[] = [];
 
@@ -828,6 +956,11 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
             setSummary(audit.summary);
             setIssues(finalIssues);
             setInputText(audit.raw_input || audit.input_text || '');
+            if (audit.isOwner) {
+                await fetchCurrentAuditCollaborators(audit.id);
+            } else {
+                setCurrentCollaborators([]);
+            }
         } catch (e) {
             console.error("Error al cargar auditoría:", e);
             setError("No se pudo cargar la auditoría previa.");
@@ -926,11 +1059,63 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         }
     };
 
+    const handleShareAudit = async () => {
+        if (!supabase || !currentAuditId || !currentAuditMeta?.isOwner) {
+            addToast("Solo el propietario puede compartir esta auditoría", "warning");
+            return;
+        }
+
+        const normalizedEmail = collaboratorEmail.trim().toLowerCase();
+        if (!normalizedEmail) {
+            addToast("Ingrese el correo del colaborador", "warning");
+            return;
+        }
+
+        if (!normalizedEmail.includes('@')) {
+            addToast("Ingrese un correo válido", "warning");
+            return;
+        }
+
+        if (normalizedEmail === currentUserEmail) {
+            addToast("Esa auditoría ya te pertenece", "info");
+            return;
+        }
+
+        setIsSharingAudit(true);
+        try {
+            const { error } = await supabase
+                .from('audit_collaborators')
+                .upsert([{
+                    audit_id: currentAuditId,
+                    owner_user_id: session.user.id,
+                    owner_email: currentUserEmail,
+                    invited_email: normalizedEmail,
+                    access_level: 'editor',
+                }], { onConflict: 'audit_id,invited_email' });
+
+            if (error) {
+                throw error;
+            }
+
+            setCollaboratorEmail('');
+            addToast("Colaborador agregado a la auditoría", "success");
+            await fetchCurrentAuditCollaborators(currentAuditId);
+            await fetchRecentAudits();
+        } catch (err: any) {
+            console.error('Error al compartir auditoría:', err);
+            addToast(`No se pudo compartir: ${err.message}`, "error");
+        } finally {
+            setIsSharingAudit(false);
+        }
+    };
+
     const handleClearTerminal = () => {
         setInputText('');
         setIssues([]);
         setSummary('');
         setCurrentAuditId(null);
+        setCurrentAuditMeta(null);
+        setCurrentCollaborators([]);
         addToast("Terminal reiniciada correctamente", "warning");
     };
 
@@ -958,6 +1143,11 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
 
     const handleDeleteAudit = async (e: React.MouseEvent, id: number) => {
         e.stopPropagation();
+        const targetAudit = recentAudits.find(a => String(a.id) === String(id));
+        if (targetAudit && !targetAudit.isOwner) {
+            addToast("Solo el propietario puede eliminar esta auditoría compartida", "warning");
+            return;
+        }
         setAuditToDelete(id);
     };
 
@@ -975,9 +1165,11 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
 
             if (currentAuditId === String(id)) {
                 setCurrentAuditId(null);
+                setCurrentAuditMeta(null);
                 setIssues([]);
                 setSummary('');
                 setInputText('');
+                setCurrentCollaborators([]);
             }
         }
         setAuditToDelete(null);
@@ -1055,6 +1247,12 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                 </div>
 
                 <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8 w-full md:w-auto">
+                    <div className="flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/20 px-4 py-2 rounded-full">
+                        <div className="w-2 h-2 rounded-full bg-indigo-400"></div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-indigo-300">
+                            Team Sync Enabled
+                        </span>
+                    </div>
                     <div className="flex items-center gap-3 bg-slate-900/80 border border-slate-800 px-4 py-2 rounded-full">
                         <div className={`w-2 h-2 rounded-full ${isDbConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
@@ -1291,11 +1489,83 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                             </div>
                             {error && <div className="mt-6 p-5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-semibold">{error}</div>}
                         </div>
+
+                        <div className="mt-6 bg-[#060810]/70 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
+                                <div>
+                                    <h3 className="text-[11px] font-black text-indigo-300 uppercase tracking-[0.3em]">Colaboración de Equipo</h3>
+                                    <p className="text-xs text-slate-500 mt-2">
+                                        Comparte una auditoría con otra persona para que vea los hallazgos, marque avances y trabaje la lista en equipo.
+                                    </p>
+                                </div>
+                                {currentAuditMeta && (
+                                    <div className={`px-3 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-widest ${currentAuditMeta.isOwner ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-indigo-500/20 bg-indigo-500/10 text-indigo-300'}`}>
+                                        {currentAuditMeta.isOwner ? 'Propietario' : `Compartida por ${currentAuditMeta.ownerEmail}`}
+                                    </div>
+                                )}
+                            </div>
+
+                            {currentAuditId ? (
+                                canManageCollaborators ? (
+                                    <div className="space-y-5">
+                                        <div className="flex flex-col md:flex-row gap-3">
+                                            <input
+                                                type="email"
+                                                value={collaboratorEmail}
+                                                onChange={(e) => setCollaboratorEmail(e.target.value)}
+                                                placeholder="correo@equipo.com"
+                                                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:border-indigo-400 outline-none transition-all"
+                                            />
+                                            <button
+                                                onClick={handleShareAudit}
+                                                disabled={isSharingAudit}
+                                                className="px-5 py-3 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-slate-950 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all"
+                                            >
+                                                {isSharingAudit ? 'Compartiendo...' : 'Agregar Colaborador'}
+                                            </button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {currentCollaborators.length > 0 ? currentCollaborators.map((collab) => (
+                                                <div key={collab.invited_email} className="bg-slate-950/70 border border-slate-800 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm text-slate-200 font-semibold truncate">{collab.invited_email}</p>
+                                                        <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">{collab.access_level}</p>
+                                                    </div>
+                                                    <span className="text-[9px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2 py-1 rounded-lg uppercase font-black tracking-widest">
+                                                        Activo
+                                                    </span>
+                                                </div>
+                                            )) : (
+                                                <div className="md:col-span-2 border border-dashed border-slate-800 rounded-xl px-4 py-6 text-center">
+                                                    <p className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold">Aún no hay colaboradores</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="border border-indigo-500/20 bg-indigo-500/5 rounded-xl px-4 py-4">
+                                        <p className="text-sm text-indigo-200 font-semibold">Esta auditoría te fue compartida.</p>
+                                        <p className="text-xs text-slate-400 mt-1">Puedes revisar y actualizar hallazgos si la política de Supabase te da permiso de edición.</p>
+                                    </div>
+                                )
+                            ) : (
+                                <div className="border border-dashed border-slate-800 rounded-xl px-4 py-6 text-center">
+                                    <p className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold">Primero guarda o abre una auditoría</p>
+                                    <p className="text-xs text-slate-600 mt-2">Cuando exista una auditoría activa, aquí podrás compartirla por correo.</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="lg:col-span-4 space-y-6">
                         <div className="bg-slate-900/20 border border-slate-800/40 p-8 rounded-2xl flex flex-col h-full backdrop-blur-sm">
-                            <h3 className="text-[11px] font-black text-sky-500 uppercase tracking-widest mb-6">Logs Recientes (Supabase)</h3>
+                            <div className="flex items-center justify-between gap-4 mb-6">
+                                <h3 className="text-[11px] font-black text-sky-500 uppercase tracking-widest">Auditorías del Equipo</h3>
+                                <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">
+                                    {recentAudits.filter(a => a.isOwner).length} propias / {recentAudits.filter(a => !a.isOwner).length} compartidas
+                                </span>
+                            </div>
                             <div className="space-y-3 flex-1 overflow-y-auto max-h-[440px] pr-2">
                                 {isDbConnected ? (
                                     recentAudits.length > 0 ? recentAudits.map((audit) => (
@@ -1305,14 +1575,24 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                                                     {audit.summary.substring(0, 60)}...
                                                 </p>
                                                 <div className="flex items-center gap-2 flex-shrink-0">
+                                                    <span className={`text-[8px] px-1.5 py-0.5 rounded font-black tracking-tighter ${audit.isOwner ? 'bg-sky-500/15 text-sky-300' : 'bg-indigo-500/15 text-indigo-300'}`}>
+                                                        {audit.isOwner ? 'MÍA' : 'TEAM'}
+                                                    </span>
                                                     {audit.isCompleted && <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-black tracking-tighter">DONE</span>}
-                                                    <button onClick={(e) => handleDeleteAudit(e, audit.id)} className="text-slate-600 hover:text-red-500 transition-colors p-1">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
-                                                    </button>
+                                                    {audit.isOwner && (
+                                                        <button onClick={(e) => handleDeleteAudit(e, Number(audit.id))} className="text-slate-600 hover:text-red-500 transition-colors p-1">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="flex justify-between items-center mt-3">
-                                                <p className="text-[9px] text-slate-600 mono font-bold">{new Date(audit.created_at).toLocaleString()}</p>
+                                                <div>
+                                                    <p className="text-[9px] text-slate-600 mono font-bold">{new Date(audit.created_at).toLocaleString()}</p>
+                                                    <p className="text-[8px] text-slate-700 font-bold uppercase tracking-widest mt-1">
+                                                        {audit.isOwner ? 'Propietario actual' : `Owner: ${audit.ownerEmail}`}
+                                                    </p>
+                                                </div>
                                                 <span className="text-[8px] text-sky-500 font-bold uppercase tracking-tighter opacity-0 group-hover:opacity-100 italic">Abrir</span>
                                             </div>
                                         </div>

@@ -144,6 +144,21 @@ Por supuesto, para que la opción de guardar en servidor funcione necesitas
 estar logueado (correo/contraseña) y tener una instancia de Supabase conectada.
 Sin login, solo funcionará el almacenamiento local.
 
+## Colaboración en equipo
+
+La app ahora puede compartir auditorías entre personas del equipo usando correo
+electrónico. El flujo MVP es:
+
+1. Crear o abrir una auditoría existente.
+2. En el panel `Colaboración de Equipo`, introducir el correo del colaborador.
+3. El colaborador verá esa auditoría en `Auditorías del Equipo` cuando inicie
+   sesión con ese mismo correo.
+
+Para habilitarlo en Supabase debes ejecutar también la sección
+`COLABORACIÓN DE AUDITORÍAS` dentro de [SUPABASE_SETUP.sql](./SUPABASE_SETUP.sql).
+Si esa tabla o sus políticas no existen todavía, la interfaz seguirá
+funcionando pero no podrá listar ni guardar colaboradores.
+
 
 ## Esquema de la base de datos
 
