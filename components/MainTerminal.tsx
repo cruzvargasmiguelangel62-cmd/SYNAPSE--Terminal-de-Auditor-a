@@ -76,7 +76,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
     const [currentAuditMeta, setCurrentAuditMeta] = useState<AuditRecord | null>(null);
     const [tableCopied, setTableCopied] = useState(false);
     const [allCopied, setAllCopied] = useState(false);
-    const [auditToDelete, setAuditToDelete] = useState<number | null>(null);
+    const [auditToDelete, setAuditToDelete] = useState<string | number | null>(null);
     const [collaboratorEmail, setCollaboratorEmail] = useState('');
     const [currentCollaborators, setCurrentCollaborators] = useState<AuditCollaborator[]>([]);
     const [isSharingAudit, setIsSharingAudit] = useState(false);
@@ -181,6 +181,22 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         setCurrentCollaborators((data || []) as AuditCollaborator[]);
     };
 
+    const ensureCurrentUserProfile = async () => {
+        if (!supabase || !session || !currentUserEmail) return;
+
+        const { error } = await supabase
+            .from('user_profiles')
+            .upsert([{
+                user_id: session.user.id,
+                email: currentUserEmail,
+                display_name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || currentUserEmail,
+            }], { onConflict: 'user_id' });
+
+        if (error && !error.message.toLowerCase().includes('user_profiles')) {
+            console.error('No se pudo sincronizar el perfil público del usuario:', error);
+        }
+    };
+
     useEffect(() => {
         if (!supabase || !currentAuditId) return;
 
@@ -220,6 +236,10 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
             supabase.removeChannel(channel);
         };
     }, [supabase, currentAuditId]);
+
+    useEffect(() => {
+        ensureCurrentUserProfile();
+    }, [session?.user.id, currentUserEmail]);
 
     const fetchUserConfig = async () => {
         if (!supabase || !session) return;
@@ -1194,6 +1214,21 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
 
         setIsSharingAudit(true);
         try {
+            const { data: registeredUser, error: userLookupError } = await supabase
+                .from('user_profiles')
+                .select('email')
+                .eq('email', normalizedEmail)
+                .maybeSingle();
+
+            if (userLookupError) {
+                throw userLookupError;
+            }
+
+            if (!registeredUser) {
+                addToast("Ese correo todavía no tiene cuenta en la plataforma", "warning");
+                return;
+            }
+
             const { error } = await supabase
                 .from('audit_collaborators')
                 .upsert([{
@@ -1252,7 +1287,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         }
     };
 
-    const handleDeleteAudit = async (e: React.MouseEvent, id: number) => {
+    const handleDeleteAudit = async (e: React.MouseEvent, id: string | number) => {
         e.stopPropagation();
         const targetAudit = recentAudits.find(a => String(a.id) === String(id));
         if (targetAudit && !targetAudit.isOwner) {
@@ -1691,7 +1726,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                                                     </span>
                                                     {audit.isCompleted && <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-black tracking-tighter">DONE</span>}
                                                     {audit.isOwner && (
-                                                        <button onClick={(e) => handleDeleteAudit(e, Number(audit.id))} className="text-slate-600 hover:text-red-500 transition-colors p-1">
+                                                        <button onClick={(e) => handleDeleteAudit(e, audit.id)} className="text-slate-600 hover:text-red-500 transition-colors p-1">
                                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
                                                         </button>
                                                     )}

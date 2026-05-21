@@ -30,6 +30,28 @@ CREATE POLICY "Users can manage their own config"
 -- Asegurarse de que el RLS esté habilitado y las políticas sean correctas
 -- (Suponiendo que ya existe por el código de MainTerminal)
 
+-- 2.1 DIRECTORIO BÁSICO DE USUARIOS
+-- Se usa para validar si el correo ya tiene cuenta antes de compartir auditorías.
+CREATE TABLE IF NOT EXISTS public.user_profiles (
+    user_id UUID REFERENCES auth.users NOT NULL PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    display_name TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage their own public profile"
+    ON public.user_profiles
+    FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Authenticated users can read user profiles"
+    ON public.user_profiles
+    FOR SELECT
+    USING (auth.role() = 'authenticated');
+
 -- 3. TABLA DE ISSUES (HALLAZGOS)
 -- Nota: la aplicación almacena un `external_id` generado por la IA para
 -- poder correlacionar los registros. Asegúrate de que la tabla tenga esa
