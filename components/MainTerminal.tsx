@@ -45,7 +45,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
     const [useSystemKey, setUseSystemKey] = useState(true);
     const [systemCredits, setSystemCredits] = useState(() => {
         const savedCount = localStorage.getItem('synapse_credits');
-        return savedCount !== null ? parseInt(savedCount) : 10;
+        return savedCount !== null ? parseInt(savedCount) : 50;
     });
     const [showApiConfig, setShowApiConfig] = useState(false);
     const [groqKeyError, setGroqKeyError] = useState<string | null>(null);
