@@ -93,7 +93,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
     const isDbConnected = !!supabase;
     const currentUserEmail = session.user.email?.trim().toLowerCase() || '';
     const canManageCollaborators = !!currentAuditMeta?.isOwner;
-    const canDeleteCurrentAudit = !!currentAuditMeta?.isOwner;
+    const collaboratorEmails = Array.from(new Set([currentUserEmail, ...currentCollaborators.map(c => c.invited_email)]));
 
     const [loadingMessage, setLoadingMessage] = useState('Analizando trazas...');
     const messages = [
@@ -180,6 +180,46 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
 
         setCurrentCollaborators((data || []) as AuditCollaborator[]);
     };
+
+    useEffect(() => {
+        if (!supabase || !currentAuditId) return;
+
+        const channel = supabase
+            .channel(`audit-live-${currentAuditId}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'issues',
+                filter: `audit_id=eq.${currentAuditId}`,
+            }, async () => {
+                const { data } = await supabase
+                    .from('issues')
+                    .select('*')
+                    .eq('audit_id', currentAuditId)
+                    .order('external_id', { ascending: true });
+
+                if (data) {
+                    setIssues(data.map((si: any) => ({
+                        dbId: si.id,
+                        id: si.external_id,
+                        title: si.title,
+                        desc: si.description,
+                        category: si.category as any,
+                        severity: si.severity as Severity,
+                        fix: si.fix_plan || '',
+                        isDone: si.is_done,
+                        assigneeEmail: si.assignee_email || '',
+                        collaboratorNote: si.collaborator_note || '',
+                    })));
+                }
+                fetchRecentAudits();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [supabase, currentAuditId]);
 
     const fetchUserConfig = async () => {
         if (!supabase || !session) return;
@@ -695,7 +735,9 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                                 category: i.category,
                                 severity: i.severity,
                                 fix_plan: i.fix,
-                                is_done: false
+                                is_done: false,
+                                assignee_email: i.assigneeEmail || null,
+                                collaborator_note: i.collaboratorNote || ''
                             };
                         });
 
@@ -709,7 +751,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                     if (insertedIssues) {
                         const finalIssues = respIssues.map(i => {
                             const dbRecord = insertedIssues.find(si => si.external_id === i.id);
-                            return { ...i, dbId: dbRecord?.id, isDone: false };
+                            return { ...i, dbId: dbRecord?.id, isDone: false, assigneeEmail: dbRecord?.assignee_email || '', collaboratorNote: dbRecord?.collaborator_note || '' };
                         });
                         setIssues(finalIssues);
                     }
@@ -744,7 +786,9 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                             category: i.category,
                             severity: i.severity,
                             fix_plan: i.fix,
-                            is_done: false
+                            is_done: false,
+                            assignee_email: i.assigneeEmail || null,
+                            collaborator_note: i.collaboratorNote || ''
                         }));
 
                         const { data: insertedIssues, error: insertError } = await supabase.from('issues').insert(issuesToInsert).select();
@@ -757,7 +801,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         if (insertedIssues) {
                             const finalIssues = respIssues.map(i => {
                                 const dbRecord = insertedIssues.find(si => si.external_id === i.id);
-                                return { ...i, dbId: dbRecord?.id, isDone: false };
+                                return { ...i, dbId: dbRecord?.id, isDone: false, assigneeEmail: dbRecord?.assignee_email || '', collaboratorNote: dbRecord?.collaborator_note || '' };
                             });
                             setIssues(finalIssues);
                         }
@@ -860,7 +904,9 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                                 category: i.category,
                                 severity: i.severity || Severity.LOW,
                                 fix_plan: i.fix || 'Pendiente de resolución técnica.',
-                                is_done: false
+                                is_done: false,
+                                assignee_email: i.assigneeEmail || null,
+                                collaborator_note: i.collaboratorNote || ''
                             };
                         });
 
@@ -873,7 +919,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                     if (insertedIssues) {
                         const finalIssues = resultIssues.map(i => {
                             const dbRecord = insertedIssues.find(si => si.external_id === i.id);
-                            return { ...i, dbId: dbRecord?.id, isDone: false };
+                            return { ...i, dbId: dbRecord?.id, isDone: false, assigneeEmail: dbRecord?.assignee_email || '', collaboratorNote: dbRecord?.collaborator_note || '' };
                         });
                         setIssues(finalIssues);
                     }
@@ -913,7 +959,9 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                                     category: i.category,
                                     severity: i.severity || Severity.LOW,
                                     fix_plan: i.fix || 'Pendiente de resolución técnica.',
-                                    is_done: false
+                                    is_done: false,
+                                    assignee_email: i.assigneeEmail || null,
+                                    collaborator_note: i.collaboratorNote || ''
                                 };
                             });
 
@@ -927,7 +975,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         if (insertedIssues) {
                             const finalIssues = resultIssues.map(i => {
                                 const dbRecord = insertedIssues.find(si => si.external_id === i.id);
-                                return { ...i, dbId: dbRecord?.id, isDone: false };
+                                return { ...i, dbId: dbRecord?.id, isDone: false, assigneeEmail: dbRecord?.assignee_email || '', collaboratorNote: dbRecord?.collaborator_note || '' };
                             });
                             setIssues(finalIssues);
                         }
@@ -971,7 +1019,9 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                     category: si.category as any,
                     severity: si.severity as Severity,
                     fix: si.fix_plan || '',
-                    isDone: si.is_done
+                    isDone: si.is_done,
+                    assigneeEmail: si.assignee_email || '',
+                    collaboratorNote: si.collaborator_note || ''
                 }));
             } else {
                 finalIssues = (audit.issues || []).map((i: any) => ({
@@ -981,7 +1031,9 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                     category: i.category,
                     severity: i.severity,
                     fix: i.fix || i.fix_plan || '',
-                    isDone: i.isDone || i.is_done || false
+                    isDone: i.isDone || i.is_done || false,
+                    assigneeEmail: i.assignee_email || '',
+                    collaboratorNote: i.collaborator_note || ''
                 }));
             }
 
@@ -1004,6 +1056,11 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
     const handleToggleDone = async (id: number) => {
         const issue = issues.find(i => i.id === id);
         if (!issue) return;
+        const canToggle = !issue.assigneeEmail || issue.assigneeEmail === currentUserEmail || currentAuditMeta?.isOwner;
+        if (!canToggle) {
+            addToast("Solo el responsable asignado o el propietario puede cerrar esta tarea", "warning");
+            return;
+        }
         const newStatus = !issue.isDone;
         setIssues(prev => prev.map(i => i.id === id ? { ...i, isDone: newStatus } : i));
         if (supabase && issue.dbId) {
@@ -1046,6 +1103,28 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         setIssues(prev => prev.map(i => i.id === id ? { ...i, desc: text } : i));
         if (supabase && issue.dbId) {
             await supabase.from('issues').update({ description: text }).eq('id', issue.dbId);
+        }
+    };
+
+    const handleUpdateAssignee = async (id: number, email: string) => {
+        if (!currentAuditMeta?.isOwner) {
+            addToast("Solo el propietario puede asignar responsables", "warning");
+            return;
+        }
+        const issue = issues.find(i => i.id === id);
+        if (!issue) return;
+        setIssues(prev => prev.map(i => i.id === id ? { ...i, assigneeEmail: email } : i));
+        if (supabase && issue.dbId) {
+            await supabase.from('issues').update({ assignee_email: email || null }).eq('id', issue.dbId);
+        }
+    };
+
+    const handleUpdateCollaboratorNote = async (id: number, text: string) => {
+        const issue = issues.find(i => i.id === id);
+        if (!issue) return;
+        setIssues(prev => prev.map(i => i.id === id ? { ...i, collaboratorNote: text } : i));
+        if (supabase && issue.dbId) {
+            await supabase.from('issues').update({ collaborator_note: text }).eq('id', issue.dbId);
         }
     };
 
@@ -1714,9 +1793,14 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                                     onUpdateFix={handleUpdateFix}
                                     onUpdateTitle={handleUpdateTitle}
                                     onUpdateDesc={handleUpdateDesc}
+                                    onUpdateAssignee={handleUpdateAssignee}
+                                    onUpdateCollaboratorNote={handleUpdateCollaboratorNote}
                                     onCopyIssue={handleCopyIssue}
                                     onExportGitHub={handleExportGitHub}
                                     onExportTrello={handleExportTrello}
+                                    collaborators={collaboratorEmails}
+                                    currentUserEmail={currentUserEmail}
+                                    canAssignTasks={!!currentAuditMeta?.isOwner}
                                 />
                             </>
                         )}

@@ -18,20 +18,51 @@ const AppWrapper = () => (
 const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
+  const [authCallbackMessage, setAuthCallbackMessage] = useState<string | null>(null);
+  const [authCallbackError, setAuthCallbackError] = useState<string | null>(null);
 
   // Gestión de la Sesión de Supabase
   useEffect(() => {
+    const pathname = window.location.pathname;
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const searchParams = new URLSearchParams(window.location.search);
+    const isAuthCallback = pathname === '/auth/callback';
+
+    if (isAuthCallback) {
+      const errorDescription = hashParams.get('error_description') || searchParams.get('error_description');
+      const accessToken = hashParams.get('access_token');
+
+      if (errorDescription) {
+        setAuthCallbackError(decodeURIComponent(errorDescription.replace(/\+/g, ' ')));
+      } else if (accessToken) {
+        setAuthCallbackMessage('Confirmación recibida. Estamos abriendo tu sesión...');
+      } else {
+        setAuthCallbackMessage('Tu correo fue confirmado. Ya puedes iniciar sesión en Synapse.');
+      }
+    }
+
     if (supabase) {
       // 1. Obtener sesión actual inicial
       supabase.auth.getSession().then(({ data: { session } }) => {
         setSession(session);
         setIsSessionLoading(false);
+
+        if (session && isAuthCallback) {
+          window.history.replaceState({}, document.title, '/');
+        }
       });
 
       // 2. Escuchar cambios en el estado de autenticación
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         setSession(session);
         setIsSessionLoading(false);
+
+        if (session && isAuthCallback) {
+          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+            setAuthCallbackMessage('Correo confirmado correctamente. Bienvenido a Synapse.');
+          }
+          window.history.replaceState({}, document.title, '/');
+        }
       });
 
       return () => subscription.unsubscribe();
@@ -55,7 +86,7 @@ const App: React.FC = () => {
 
   // Si no hay sesión, mostrar el Login (Auth)
   if (!session) {
-    return <Auth onLoginSuccess={() => { }} />; // El onAuthStateChange manejará la redirección
+    return <Auth onLoginSuccess={() => { }} initialMessage={authCallbackMessage} initialError={authCallbackError} />; // El onAuthStateChange manejará la redirección
   }
 
   // Si hay sesión, mostrar la Terminal Principal

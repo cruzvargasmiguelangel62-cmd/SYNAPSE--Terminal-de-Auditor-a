@@ -18,6 +18,8 @@ export interface Issue {
   severity: Severity;
   fix: string;
   isDone?: boolean;
+  assigneeEmail?: string;
+  collaboratorNote?: string;
 }
 
 export interface AnalysisResponse {

@@ -1,20 +1,30 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { AuthHeader } from './AuthHeader';
 import { AuthFooter, AuthToggle } from './AuthFooter';
 
 interface AuthProps {
     onLoginSuccess: () => void;
+    initialMessage?: string | null;
+    initialError?: string | null;
 }
 
-export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
+export const Auth: React.FC<AuthProps> = ({ onLoginSuccess, initialMessage = null, initialError = null }) => {
     const [loading, setLoading] = useState(false);
     const [loginSuccess, setLoginSuccess] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isSignUp, setIsSignUp] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [message, setMessage] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(initialError);
+    const [message, setMessage] = useState<string | null>(initialMessage);
+
+    useEffect(() => {
+        setMessage(initialMessage);
+    }, [initialMessage]);
+
+    useEffect(() => {
+        setError(initialError);
+    }, [initialError]);
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -26,9 +36,16 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
         try {
             if (isSignUp) {
-                const { error } = await supabase.auth.signUp({ email, password });
+                const emailRedirectTo = `${window.location.origin}/auth/callback`;
+                const { error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        emailRedirectTo,
+                    },
+                });
                 if (error) throw error;
-                setMessage('¡Registro exitoso! Revisa tu correo para confirmar.');
+                setMessage('¡Registro exitoso! Revisa tu correo y confirma tu cuenta para volver a Synapse.');
             } else {
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;

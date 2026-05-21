@@ -52,6 +52,8 @@ CREATE POLICY "Users can manage their own config"
 --
 -- Si ya tienes `issues` pero te falta `external_id`, ejecútalo:
 -- ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS external_id INTEGER;
+-- ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS assignee_email TEXT;
+-- ALTER TABLE public.issues ADD COLUMN IF NOT EXISTS collaborator_note TEXT;
 
 -- Habilitar RLS en issues
 -- ALTER TABLE public.issues ENABLE ROW LEVEL SECURITY;

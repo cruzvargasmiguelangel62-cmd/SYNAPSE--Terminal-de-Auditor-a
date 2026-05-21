@@ -8,9 +8,14 @@ interface IssueTableProps {
   onUpdateFix: (id: number, text: string) => void;
   onUpdateTitle?: (id: number, text: string) => void;
   onUpdateDesc?: (id: number, text: string) => void;
+  onUpdateAssignee?: (id: number, email: string) => void;
+  onUpdateCollaboratorNote?: (id: number, text: string) => void;
   onExportGitHub?: (issue: Issue) => void;
   onExportTrello?: (issue: Issue) => void;
   onCopyIssue?: (issue: Issue) => void;
+  collaborators?: string[];
+  currentUserEmail?: string;
+  canAssignTasks?: boolean;
 }
 
 // Accepts a severity that may not exactly match the enum (normalized earlier)
@@ -44,9 +49,14 @@ export const IssueTable: React.FC<IssueTableProps> = ({
   onUpdateFix,
   onUpdateTitle,
   onUpdateDesc,
+  onUpdateAssignee,
+  onUpdateCollaboratorNote,
   onExportGitHub,
   onExportTrello,
-  onCopyIssue
+  onCopyIssue,
+  collaborators = [],
+  currentUserEmail = '',
+  canAssignTasks = false,
 }) => {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
@@ -67,10 +77,11 @@ export const IssueTable: React.FC<IssueTableProps> = ({
   };
 
   // Componente interno para el Checkbox Cuadrado
-  const CustomCheckbox = ({ isDone, onClick }: { isDone: boolean, onClick: () => void }) => (
+  const CustomCheckbox = ({ isDone, onClick, disabled }: { isDone: boolean, onClick: () => void, disabled?: boolean }) => (
     <button
       onClick={onClick}
-      className={`transition-all duration-200 transform active:scale-90 ${isDone ? 'text-sky-500' : 'text-slate-600 hover:text-slate-400'
+      disabled={disabled}
+      className={`transition-all duration-200 transform active:scale-90 disabled:cursor-not-allowed disabled:opacity-40 ${isDone ? 'text-sky-500' : 'text-slate-600 hover:text-slate-400'
         }`}
     >
       {isDone ? (
@@ -124,6 +135,9 @@ export const IssueTable: React.FC<IssueTableProps> = ({
         /* --- VISTA DE TARJETAS --- */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {(issues || []).map((issue) => (
+            (() => {
+              const canToggle = !issue.assigneeEmail || issue.assigneeEmail === currentUserEmail || canAssignTasks;
+              return (
             <div key={issue.id} className={`bg-slate-900/40 border rounded-2xl p-5 transition-all ${issue.isDone ? 'border-slate-800/60 opacity-60 grayscale-[0.3]' : 'border-indigo-500/30 bg-indigo-500/5 shadow-lg shadow-indigo-500/5 hover:border-indigo-500/50'}`}>
               <div className="flex justify-between items-start mb-4">
                 <span className="text-[10px] font-mono text-slate-500 bg-slate-950 px-2 py-1 rounded border border-slate-800">
@@ -139,7 +153,7 @@ export const IssueTable: React.FC<IssueTableProps> = ({
                   <button onClick={() => onExportTrello?.(issue)} className="p-1.5 text-slate-500 hover:text-sky-400 bg-slate-950 rounded-lg border border-slate-800 transition-colors" title="Exportar a Trello">
                     <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M19.389 0H4.611C2.069 0 0 2.069 0 4.611V19.39C0 21.931 2.069 24 4.611 24h14.778C21.931 24 24 21.931 24 19.389V4.611C24 2.069 21.931 0 19.389 0zM10.8 17.4c0 .994-.806 1.8-1.8 1.8H5.4c-.994 0-1.8-.806-1.8-1.8V5.4c0-.994.806-1.8 1.8-1.8H9c.994 0 1.8.806 1.8 1.8v12zm9.6-4.8c0 .994-.806 1.8-1.8 1.8h-3.6c-.994 0-1.8-.806-1.8-1.8V5.4c0-.994.806-1.8 1.8-1.8h3.6c.994 0 1.8.806 1.8 1.8v7.2z" /></svg>
                   </button>
-                  <CustomCheckbox isDone={issue.isDone} onClick={() => onToggleDone(issue.id)} />
+                  <CustomCheckbox isDone={issue.isDone} onClick={() => onToggleDone(issue.id)} disabled={!canToggle} />
                 </div>
               </div>
               <div className="space-y-3">
@@ -163,8 +177,27 @@ export const IssueTable: React.FC<IssueTableProps> = ({
                   className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-sky-500/50 outline-none h-24 mt-2"
                   placeholder="Definir resolución..."
                 />
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Responsable</label>
+                  <select
+                    value={issue.assigneeEmail || ''}
+                    onChange={(e) => onUpdateAssignee?.(issue.id, e.target.value)}
+                    disabled={!canAssignTasks}
+                    className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 disabled:opacity-50 outline-none"
+                  >
+                    <option value="">Sin asignar</option>
+                    {collaborators.map((email) => <option key={email} value={email}>{email}</option>)}
+                  </select>
+                </div>
+                <textarea
+                  value={issue.collaboratorNote || ''}
+                  onChange={(e) => onUpdateCollaboratorNote?.(issue.id, e.target.value)}
+                  className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-300 focus:ring-1 focus:ring-indigo-500/50 outline-none h-20"
+                  placeholder="Nota del colaborador / avance / bloqueo..."
+                />
               </div>
             </div>
+          )})()
           ))}
         </div>
       ) : (
@@ -184,9 +217,12 @@ export const IssueTable: React.FC<IssueTableProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-800/40">
                 {(issues || []).map((issue) => (
+                  (() => {
+                    const canToggle = !issue.assigneeEmail || issue.assigneeEmail === currentUserEmail || canAssignTasks;
+                    return (
                   <tr key={issue.id} className={`group transition-colors ${issue.isDone ? 'bg-slate-950/20 opacity-60' : 'bg-indigo-500/5 hover:bg-indigo-500/10'}`}>
                     <td className="pl-6 py-6 align-top no-print">
-                      <CustomCheckbox isDone={issue.isDone} onClick={() => onToggleDone(issue.id)} />
+                      <CustomCheckbox isDone={issue.isDone} onClick={() => onToggleDone(issue.id)} disabled={!canToggle} />
                     </td>
                     <td className="px-4 py-6 align-top">
                       <span className="font-mono text-[11px] text-slate-500">REQ-{issue.id.toString().padStart(3, '0')}</span>
@@ -210,11 +246,29 @@ export const IssueTable: React.FC<IssueTableProps> = ({
                       </div>
                     </td>
                     <td className="px-4 py-6 align-top">
+                      <div className="mb-3 space-y-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Responsable</label>
+                        <select
+                          value={issue.assigneeEmail || ''}
+                          onChange={(e) => onUpdateAssignee?.(issue.id, e.target.value)}
+                          disabled={!canAssignTasks}
+                          className="w-full bg-slate-950/40 border border-slate-800 rounded-lg p-2 text-[11px] text-slate-300 disabled:opacity-50 outline-none"
+                        >
+                          <option value="">Sin asignar</option>
+                          {collaborators.map((email) => <option key={email} value={email}>{email}</option>)}
+                        </select>
+                      </div>
                       <textarea
                         value={issue.fix}
                         onChange={(e) => onUpdateFix(issue.id, e.target.value)}
                         className="w-full bg-slate-950/40 border border-slate-800 rounded-lg p-3 text-[12px] font-mono text-slate-300 focus:border-sky-500/50 outline-none h-24 no-print"
                         placeholder="Resolución de ingeniería..."
+                      />
+                      <textarea
+                        value={issue.collaboratorNote || ''}
+                        onChange={(e) => onUpdateCollaboratorNote?.(issue.id, e.target.value)}
+                        className="w-full mt-3 bg-slate-950/40 border border-slate-800 rounded-lg p-3 text-[12px] font-mono text-slate-300 focus:border-indigo-500/50 outline-none h-20 no-print"
+                        placeholder="Nota del colaborador / avance / bloqueo..."
                       />
                     </td>
                     <td className="pr-6 py-6 align-top text-center no-print">
@@ -231,6 +285,7 @@ export const IssueTable: React.FC<IssueTableProps> = ({
                       </div>
                     </td>
                   </tr>
+                    )})()
                 ))}
               </tbody>
             </table>
