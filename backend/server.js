@@ -229,6 +229,17 @@ app.post('/api/verify/trello', async (req, res) => {
 // Serve static files from frontend build
 app.use(express.static(path.join(__dirname, '../dist')));
 
+// Explicitly serve crawler files before SPA fallback.
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain');
+  res.sendFile(path.join(__dirname, '../dist', 'robots.txt'));
+});
+
+app.get('/sitemap.xml', (_req, res) => {
+  res.type('application/xml');
+  res.sendFile(path.join(__dirname, '../dist', 'sitemap.xml'));
+});
+
 // Fallback to index.html for SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../dist', 'index.html'));
