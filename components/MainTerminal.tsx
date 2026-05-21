@@ -350,7 +350,34 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         }
     };
 
-    const exportPDF = () => {
+    const loadHtml2Pdf = async () => {
+        if ((window as any).html2pdf) {
+            return (window as any).html2pdf;
+        }
+
+        await new Promise<void>((resolve, reject) => {
+            const existingScript = document.querySelector('script[data-html2pdf="true"]') as HTMLScriptElement | null;
+
+            if (existingScript) {
+                existingScript.addEventListener('load', () => resolve(), { once: true });
+                existingScript.addEventListener('error', () => reject(new Error('No se pudo cargar html2pdf')), { once: true });
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+            script.async = true;
+            script.defer = true;
+            script.dataset.html2pdf = 'true';
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('No se pudo cargar html2pdf'));
+            document.body.appendChild(script);
+        });
+
+        return (window as any).html2pdf;
+    };
+
+    const exportPDF = async () => {
         const pdfContainer = document.createElement('div');
         pdfContainer.style.padding = '40px';
         pdfContainer.style.fontFamily = 'Arial, sans-serif';
@@ -416,7 +443,12 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        (window as any).html2pdf().from(pdfContainer).set(opt).save();
+        try {
+            const html2pdf = await loadHtml2Pdf();
+            html2pdf().from(pdfContainer).set(opt).save();
+        } catch (err: any) {
+            addToast(err?.message || 'No se pudo generar el PDF', 'error');
+        }
     };
 
     const exportDetailedJSON = () => {
@@ -1200,7 +1232,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                             <div className="absolute inset-4 bg-sky-500/20 rounded-full animate-pulse flex items-center justify-center font-black text-2xl text-sky-400">S</div>
                         </div>
                         <div className="text-center space-y-3">
-                            <h3 className="text-white font-extrabold text-xl tracking-tight uppercase">Sincronizando Synapse</h3>
+                            <div className="text-white font-extrabold text-xl tracking-tight uppercase">Sincronizando Synapse</div>
                             <p className="text-sky-500 mono text-[10px] font-bold uppercase tracking-[0.3em]">{loadingMessage}</p>
                         </div>
                     </div>
@@ -1215,7 +1247,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                         </div>
                         <div className="text-center space-y-2">
-                            <h3 className="text-white font-bold text-lg">¿Eliminar Auditoría?</h3>
+                            <div className="text-white font-bold text-lg">¿Eliminar Auditoría?</div>
                             <p className="text-slate-400 text-xs">Esta acción no se puede deshacer. Los datos se perderán permanentemente.</p>
                         </div>
                         <div className="flex gap-3 w-full">
@@ -1291,7 +1323,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         {showApiConfig && (
                             <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6 mb-6 animate-fadeIn">
                                 <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
-                                    <h3 className="text-xs font-bold text-white uppercase tracking-widest">Configuración de Llaves (API Keys)</h3>
+                                    <div className="text-xs font-bold text-white uppercase tracking-widest">Configuración de Llaves (API Keys)</div>
                                     <div className="flex items-center gap-2">
                                         <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${systemCredits > 0 ? 'bg-sky-500/10 text-sky-400' : 'bg-red-500/10 text-red-400'}`}>
                                             Créditos: {systemCredits}
@@ -1493,7 +1525,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         <div className="mt-6 bg-[#060810]/70 border border-slate-800 rounded-2xl p-6 shadow-xl">
                             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
                                 <div>
-                                    <h3 className="text-[11px] font-black text-indigo-300 uppercase tracking-[0.3em]">Colaboración de Equipo</h3>
+                                    <div className="text-[11px] font-black text-indigo-300 uppercase tracking-[0.3em]">Colaboración de Equipo</div>
                                     <p className="text-xs text-slate-500 mt-2">
                                         Comparte una auditoría con otra persona para que vea los hallazgos, marque avances y trabaje la lista en equipo.
                                     </p>
@@ -1561,7 +1593,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                     <div className="lg:col-span-4 space-y-6">
                         <div className="bg-slate-900/20 border border-slate-800/40 p-8 rounded-2xl flex flex-col h-full backdrop-blur-sm">
                             <div className="flex items-center justify-between gap-4 mb-6">
-                                <h3 className="text-[11px] font-black text-sky-500 uppercase tracking-widest">Auditorías del Equipo</h3>
+                                <div className="text-[11px] font-black text-sky-500 uppercase tracking-widest">Auditorías del Equipo</div>
                                 <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">
                                     {recentAudits.filter(a => a.isOwner).length} propias / {recentAudits.filter(a => !a.isOwner).length} compartidas
                                 </span>
@@ -1647,10 +1679,10 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
 
                                 <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 p-6 sm:p-10 rounded-2xl shadow-2xl relative overflow-hidden group/summary">
                                     <div className={`absolute top-0 left-0 w-1.5 h-full ${stats.total > 0 && stats.resueltos === stats.total ? 'bg-emerald-500' : 'bg-sky-500'}`}></div>
-                                    <h3 className="text-[10px] sm:text-[11px] font-bold text-sky-500 uppercase tracking-[0.5em] mb-4 sm:mb-5 flex justify-between items-center">
+                                    <div className="text-[10px] sm:text-[11px] font-bold text-sky-500 uppercase tracking-[0.5em] mb-4 sm:mb-5 flex justify-between items-center">
                                         <span>Executive Summary // QA Analysis</span>
                                         <span className="text-[8px] opacity-0 group-hover/summary:opacity-50 transition-opacity">Editable</span>
-                                    </h3>
+                                    </div>
                                     <textarea
                                         value={summary}
                                         onChange={(e) => handleUpdateSummary(e.target.value)}
