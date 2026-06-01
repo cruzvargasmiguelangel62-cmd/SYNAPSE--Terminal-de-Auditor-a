@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
@@ -9,6 +10,15 @@ const PORT = process.env.PORT || 4000;
 
 app.use(cors());
 app.use(express.json());
+
+// Rate limiting: máximo 15 peticiones por minuto por IP al endpoint de IA
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones. Intenta de nuevo en un minuto.' }
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -48,9 +58,16 @@ DEVUELVE ÚNICAMENTE un objeto JSON válido con la estructura:
 { "summary": string, "issues": Array<{ id, title, desc, category, severity, fix }> }`;
 
 // Endpoint de análisis de issues
-app.post('/api/analyze', async (req, res) => {
+app.post('/api/analyze', aiLimiter, async (req, res) => {
   const { input, provider, apiKey, isTask } = req.body;
 
+  // Validación: el input no puede estar vacío ni exceder 10,000 caracteres
+  if (!input || typeof input !== 'string' || !input.trim()) {
+    return res.status(400).json({ error: 'El campo "input" es requerido.' });
+  }
+  if (input.length > 10000) {
+    return res.status(400).json({ error: `El texto de entrada supera el límite de 10,000 caracteres (actual: ${input.length}).` });
+  }
   // Usar la key del body (del usuario) o la del servidor (.env)
   const geminiKey = apiKey || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
   const groqKey = apiKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;

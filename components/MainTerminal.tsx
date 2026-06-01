@@ -80,6 +80,9 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
     const [collaboratorEmail, setCollaboratorEmail] = useState('');
     const [currentCollaborators, setCurrentCollaborators] = useState<AuditCollaborator[]>([]);
     const [isSharingAudit, setIsSharingAudit] = useState(false);
+    const [auditSearch, setAuditSearch] = useState('');
+    const [showReAnalyzeConfirm, setShowReAnalyzeConfirm] = useState<'analyze' | 'tasks' | null>(null);
+    const [savingIssueId, setSavingIssueId] = useState<number | null>(null);
 
     const [showGHToken, setShowGHToken] = useState(false);
     const [showTrelloKey, setShowTrelloKey] = useState(false);
@@ -862,16 +865,23 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
             if (provider === 'groq') {
                 const apiKey = useSystemKey ? undefined : customGroqKey;
                 if (!useSystemKey && !apiKey) throw new Error("API Key de Groq requerida");
+                // BUG FIX: usar systemCredits del estado React (no localStorage) como fuente de verdad
+                if (useSystemKey) {
+                    if (systemCredits <= 0) throw new Error("Créditos del sistema agotados. Use su propia API Key.");
+                    const next = Math.max(0, systemCredits - 1);
+                    setSystemCredits(next);
+                    localStorage.setItem('synapse_credits', next.toString());
+                }
                 result = await generateTasksWithGroq(inputText, apiKey || '', 'llama-3.3-70b-versatile');
             } else {
                 const apiKey = useSystemKey ? undefined : customGeminiKey;
                 if (!useSystemKey && !apiKey) throw new Error("API Key de Gemini requerida");
 
                 if (useSystemKey) {
-                    const currentCredits = parseInt(localStorage.getItem('synapse_credits') || '10');
-                    if (currentCredits <= 0) throw new Error("Créditos del sistema agotados. Use su propia API Key.");
-                    setSystemCredits(currentCredits - 1);
-                    localStorage.setItem('synapse_credits', (currentCredits - 1).toString());
+                    if (systemCredits <= 0) throw new Error("Créditos del sistema agotados. Use su propia API Key.");
+                    const next = Math.max(0, systemCredits - 1);
+                    setSystemCredits(next);
+                    localStorage.setItem('synapse_credits', next.toString());
                 }
 
                 result = await generateTasks(inputText, apiKey);
@@ -888,13 +898,8 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
             if (missingTasks) {
                 console.warn(`${missingTasks} tareas sin título ni descripción`, resultIssues);
             }
+            // BUG FIX: un solo filtro consolidado (antes había dos, el segundo nunca se usaba)
             resultIssues = resultIssues.filter(i => i.title || i.desc);
-            console.debug('Respuesta de tareas:', resultIssues);
-            const emptyTasks = resultIssues.filter(i => !i.title && !i.desc).length;
-            if (emptyTasks > 0) {
-                console.warn(`${emptyTasks} tareas sin título ni descripción`, resultIssues);
-            }
-            const filteredTasks = resultIssues.filter(i => i.title || i.desc);
 
             // some providers/models may not return a summary for task lists
             // así que garantizamos un valor legible.
@@ -1099,31 +1104,33 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         }
     };
 
+    // Helper: muestra indicador de guardado brevemente y persiste en Supabase
+    const saveIssueField = async (id: number, dbId: string | undefined, patch: Record<string, any>) => {
+        if (!supabase || !dbId) return;
+        setSavingIssueId(id);
+        await supabase.from('issues').update(patch).eq('id', dbId);
+        setTimeout(() => setSavingIssueId(null), 900);
+    };
+
     const handleUpdateFix = async (id: number, text: string) => {
         const issue = issues.find(i => i.id === id);
         if (!issue) return;
         setIssues(prev => prev.map(i => i.id === id ? { ...i, fix: text } : i));
-        if (supabase && issue.dbId) {
-            await supabase.from('issues').update({ fix_plan: text }).eq('id', issue.dbId);
-        }
+        await saveIssueField(id, issue.dbId, { fix_plan: text });
     };
 
     const handleUpdateTitle = async (id: number, text: string) => {
         const issue = issues.find(i => i.id === id);
         if (!issue) return;
         setIssues(prev => prev.map(i => i.id === id ? { ...i, title: text } : i));
-        if (supabase && issue.dbId) {
-            await supabase.from('issues').update({ title: text }).eq('id', issue.dbId);
-        }
+        await saveIssueField(id, issue.dbId, { title: text });
     };
 
     const handleUpdateDesc = async (id: number, text: string) => {
         const issue = issues.find(i => i.id === id);
         if (!issue) return;
         setIssues(prev => prev.map(i => i.id === id ? { ...i, desc: text } : i));
-        if (supabase && issue.dbId) {
-            await supabase.from('issues').update({ description: text }).eq('id', issue.dbId);
-        }
+        await saveIssueField(id, issue.dbId, { description: text });
     };
 
     const handleUpdateAssignee = async (id: number, email: string) => {
@@ -1134,18 +1141,14 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         const issue = issues.find(i => i.id === id);
         if (!issue) return;
         setIssues(prev => prev.map(i => i.id === id ? { ...i, assigneeEmail: email } : i));
-        if (supabase && issue.dbId) {
-            await supabase.from('issues').update({ assignee_email: email || null }).eq('id', issue.dbId);
-        }
+        await saveIssueField(id, issue.dbId, { assignee_email: email || null });
     };
 
     const handleUpdateCollaboratorNote = async (id: number, text: string) => {
         const issue = issues.find(i => i.id === id);
         if (!issue) return;
         setIssues(prev => prev.map(i => i.id === id ? { ...i, collaboratorNote: text } : i));
-        if (supabase && issue.dbId) {
-            await supabase.from('issues').update({ collaborator_note: text }).eq('id', issue.dbId);
-        }
+        await saveIssueField(id, issue.dbId, { collaborator_note: text });
     };
 
     const handleTranscript = (text: string) => {
@@ -1334,6 +1337,28 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         addToast("Datos de ejemplo cargados", "info");
     };
 
+    // Filtro de búsqueda aplicado al historial
+    const filteredAudits = auditSearch.trim()
+        ? recentAudits.filter(a => a.summary.toLowerCase().includes(auditSearch.toLowerCase()))
+        : recentAudits;
+
+    // Handler unificado que pide confirmación si ya hay auditoría cargada
+    const handleAnalyzeClick = () => {
+        if (currentAuditId && issues.length > 0) {
+            setShowReAnalyzeConfirm('analyze');
+        } else {
+            handleGenerate();
+        }
+    };
+
+    const handleTasksClick = () => {
+        if (currentAuditId && issues.length > 0) {
+            setShowReAnalyzeConfirm('tasks');
+        } else {
+            handleGenerateTasks();
+        }
+    };
+
     return (
         <div className="flex flex-col w-full min-h-[100dvh] selection:bg-sky-500/30 relative bg-[#0a0c10] text-slate-200">
             {/* Modal de Carga Neural */}
@@ -1348,6 +1373,40 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         <div className="text-center space-y-3">
                             <div className="text-white font-extrabold text-xl tracking-tight uppercase">Sincronizando Synapse</div>
                             <p className="text-sky-500 mono text-[10px] font-bold uppercase tracking-[0.3em]">{loadingMessage}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Confirmación Re-Análisis */}
+            {showReAnalyzeConfirm !== null && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-xl">
+                    <div className="bg-slate-900 border border-amber-500/30 p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-6 max-w-sm w-full mx-4 transform animate-in zoom-in-95 duration-200">
+                        <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        </div>
+                        <div className="text-center space-y-2">
+                            <div className="text-white font-bold text-lg">¿Reemplazar hallazgos actuales?</div>
+                            <p className="text-slate-400 text-xs">Esta acción eliminará los {issues.length} hallazgos actuales y los reemplazará con el nuevo análisis. Los cambios manuales se perderán.</p>
+                        </div>
+                        <div className="flex gap-3 w-full">
+                            <button
+                                onClick={() => setShowReAnalyzeConfirm(null)}
+                                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] uppercase tracking-widest rounded-lg transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const mode = showReAnalyzeConfirm;
+                                    setShowReAnalyzeConfirm(null);
+                                    if (mode === 'analyze') handleGenerate();
+                                    else handleGenerateTasks();
+                                }}
+                                className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] uppercase tracking-widest rounded-lg transition-colors shadow-lg shadow-amber-500/20"
+                            >
+                                Sí, reemplazar
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1616,19 +1675,24 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                             </div>
                             <textarea
                                 ref={textareaRef}
-                                value={inputText} onChange={(e) => setInputText(e.target.value)}
+                                value={inputText} onChange={(e) => setInputText(e.target.value.slice(0, 10000))}
                                 placeholder="Pegue aquí los logs de consola, reportes de Jira o descripción del fallo..."
                                 className="w-full bg-slate-950/80 border border-slate-800 p-6 text-base text-slate-200 focus:border-sky-500 outline-none transition-all min-h-[260px] rounded-xl resize-none shadow-inner"
                             />
-                            <div className="flex flex-col sm:flex-row justify-between items-center mt-6 md:mt-8 gap-4 sm:gap-6">
+                            <div className="flex justify-end mt-1">
+                                <span className={`text-[10px] mono font-bold ${
+                                    inputText.length > 9000 ? 'text-red-400' : inputText.length > 7000 ? 'text-amber-400' : 'text-slate-700'
+                                }`}>{inputText.length.toLocaleString()} / 10,000</span>
+                            </div>
+                            <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4 sm:gap-6">
                                 <div className="w-full sm:w-auto">
                                     <MicrophoneButton onTranscript={handleTranscript} isListening={isListening} setIsListening={setIsListening} />
                                 </div>
                                 <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                                    <button onClick={handleGenerateTasks} disabled={isAnalyzing} className="px-8 py-4 bg-indigo-600 text-slate-950 font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-50">
+                                    <button onClick={handleTasksClick} disabled={isAnalyzing} className="px-8 py-4 bg-indigo-600 text-slate-950 font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-50">
                                         {currentAuditId ? 'Actualizar Tareas' : 'Generar Tareas'}
                                     </button>
-                                    <button onClick={handleGenerate} disabled={isAnalyzing} className="px-12 py-4 bg-sky-500 text-slate-950 font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-sky-400 transition-all shadow-xl shadow-sky-500/20 disabled:opacity-50">
+                                    <button onClick={handleAnalyzeClick} disabled={isAnalyzing} className="px-12 py-4 bg-sky-500 text-slate-950 font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-sky-400 transition-all shadow-xl shadow-sky-500/20 disabled:opacity-50">
                                         {currentAuditId ? 'Actualizar Análisis' : 'Analizar Hallazgos'}
                                     </button>
                                 </div>
@@ -1706,15 +1770,29 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
 
                     <div className="lg:col-span-4 space-y-6">
                         <div className="bg-slate-900/20 border border-slate-800/40 p-8 rounded-2xl flex flex-col h-full backdrop-blur-sm">
-                            <div className="flex items-center justify-between gap-4 mb-6">
+                            <div className="flex items-center justify-between gap-4 mb-4">
                                 <div className="text-[11px] font-black text-sky-500 uppercase tracking-widest">Auditorías del Equipo</div>
                                 <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">
                                     {recentAudits.filter(a => a.isOwner).length} propias / {recentAudits.filter(a => !a.isOwner).length} compartidas
                                 </span>
                             </div>
-                            <div className="space-y-3 flex-1 overflow-y-auto max-h-[440px] pr-2">
+                            {/* Buscador en historial */}
+                            <div className="relative mb-4">
+                                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                                <input
+                                    type="text"
+                                    value={auditSearch}
+                                    onChange={e => setAuditSearch(e.target.value)}
+                                    placeholder="Buscar auditoría..."
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-2 text-[11px] text-slate-300 focus:border-sky-500 outline-none transition-all"
+                                />
+                                {auditSearch && (
+                                    <button onClick={() => setAuditSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-400">✕</button>
+                                )}
+                            </div>
+                            <div className="space-y-3 flex-1 overflow-y-auto max-h-[400px] pr-2">
                                 {isDbConnected ? (
-                                    recentAudits.length > 0 ? recentAudits.map((audit) => (
+                                    filteredAudits.length > 0 ? filteredAudits.map((audit) => (
                                         <div key={audit.id} onClick={() => loadPreviousAudit(audit)} className={`cursor-pointer w-full text-left p-4 bg-slate-900/50 border rounded-xl hover:border-sky-500 transition-all group relative ${String(currentAuditId) === String(audit.id) ? (audit.isCompleted ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-sky-500 bg-sky-500/5') : (audit.isCompleted ? 'border-emerald-500/10 opacity-70' : 'border-slate-800')}`}>
                                             <div className="flex justify-between items-start gap-3">
                                                 <p className={`text-[11px] font-bold uppercase truncate group-hover:text-sky-400 pr-2 flex-1 ${audit.isCompleted ? 'text-emerald-400' : 'text-slate-200'}`}>
@@ -1744,7 +1822,8 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                                         </div>
                                     )) : (
                                         <div className="flex flex-col items-center justify-center h-40 border border-dashed border-slate-800 rounded-xl text-center px-4">
-                                            <p className="text-[10px] text-slate-700 font-bold uppercase tracking-widest">Esperando Registros...</p>
+                                            <p className="text-[10px] text-slate-700 font-bold uppercase tracking-widest">{auditSearch ? 'Sin resultados' : 'Esperando Registros...'}</p>
+                                            {auditSearch && <button onClick={() => setAuditSearch('')} className="mt-2 text-[9px] text-sky-500 hover:text-sky-400 font-bold uppercase tracking-widest">Limpiar búsqueda</button>}
                                         </div>
                                     )
                                 ) : (
@@ -1822,6 +1901,13 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                                     </div>
                                 </div>
 
+                                {/* Indicador global de guardado inline */}
+                                {savingIssueId !== null && (
+                                    <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-bold uppercase tracking-widest animate-pulse mb-2">
+                                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6 9 17l-5-5"/></svg>
+                                        Guardando cambio...
+                                    </div>
+                                )}
                                 <IssueTable
                                     issues={issues}
                                     onToggleDone={handleToggleDone}
