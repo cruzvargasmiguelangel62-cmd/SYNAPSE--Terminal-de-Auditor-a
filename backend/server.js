@@ -17,18 +17,22 @@ app.get('/health', (req, res) => {
 
 // --- PROXY IA ---
 
-// Instrucciones para Gemini
-const SYSTEM_INSTRUCTION = `Eres el sistema central de auditoría SYNAPSE // QA. 
+// Instrucciones para Gemini / Groq
+// IMPORTANTE: Groq requiere que el prompt contenga la palabra "json"
+// cuando se usa response_format: { type: "json_object" }.
+const SYSTEM_INSTRUCTION = `Eres el sistema central de auditoría SYNAPSE // QA.
 Tu misión es procesar reportes técnicos con precisión quirúrgica.
 1. Analiza con rigor: fallos de UI, errores de lógica, problemas de codificación (UTF-8) y regresiones funcionales.
 2. Clasifica obligatoriamente en: 'UI/UX', 'Backend', 'Datos', 'Seguridad', 'Rendimiento'.
 3. El resumen ejecutivo debe ser directo, técnico y profesional (evita saludos).
-4. Para cada hallazgo: 
+4. Para cada hallazgo:
    - Título: Conciso y técnico.
    - Descripción: Detalle del comportamiento observado vs esperado.
    - Severidad: Alta/Media/Baja.
    - Solución: Instrucciones técnicas de remediación.
-RESPONDE SIEMPRE EN ESPAÑOL. Usa terminología de ingeniería de software moderna.`;
+RESPONDE SIEMPRE EN ESPAÑOL. Usa terminología de ingeniería de software moderna.
+DEVUELVE ÚNICAMENTE un objeto JSON válido con la estructura:
+{ "summary": string, "issues": Array<{ id, title, desc, category, severity, fix }> }`;
 
 const TASK_SYSTEM_INSTRUCTION = `Eres el gestor de incidentes SYNAPSE // TASKS.
 Tu misión es transformar descripciones de lenguaje natural en una lista estructurada de tareas técnicas pendientes (To-Do List).
@@ -39,7 +43,9 @@ Tu misión es transformar descripciones de lenguaje natural en una lista estruct
 5. Asigna prioridad (Severity) basada en la urgencia o importancia del contexto (ej: seguridad/crítico -> Alta).
 6. Para cada tarea incluye campos claramente nombrados: 'title' (resumen breve), 'desc' (detalle del trabajo), una breve 'fix' o 'plan_tecnico' con la sugerencia de resolución técnica y, si aplica, 'category' y 'severity'.
 7. Estructura de salida JSON e incluye el campo "issues" con el arreglo de tareas y "summary" con el texto principal.
-RESPONDE SIEMPRE EN ESPAÑOL.`;
+RESPONDE SIEMPRE EN ESPAÑOL.
+DEVUELVE ÚNICAMENTE un objeto JSON válido con la estructura:
+{ "summary": string, "issues": Array<{ id, title, desc, category, severity, fix }> }`;
 
 // Endpoint de análisis de issues
 app.post('/api/analyze', async (req, res) => {
@@ -53,7 +59,7 @@ app.post('/api/analyze', async (req, res) => {
     if (provider === 'gemini') {
       if (!geminiKey) return res.status(400).json({ error: 'Falta Gemini API Key' });
 
-      const genAI = new GoogleGenAI(geminiKey);
+      const genAI = new GoogleGenAI({ apiKey: geminiKey });
       const model = genAI.getGenerativeModel({
         model: "gemini-2.0-flash",
         systemInstruction: isTask ? TASK_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION
@@ -68,7 +74,7 @@ app.post('/api/analyze', async (req, res) => {
 
       // parsear y normalizar para asegurar campos mínimos
       const parsed = JSON.parse(text);
-if (parsed) {
+      if (parsed) {
         parsed.summary = parsed.summary || parsed.resumen || '[sin resumen]';
         if (Array.isArray(parsed.issues)) {
           parsed.issues = parsed.issues.map((i, idx) => {
