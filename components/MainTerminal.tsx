@@ -10,6 +10,8 @@ import { useToast } from './Toast';
 import { Session } from '@supabase/supabase-js';
 import { exportToGitHub, exportToTrello, verifyGitHub, verifyTrello } from '../services/exportService';
 import { Eye, EyeOff, ShieldCheck, Activity } from 'lucide-react';
+import { Dashboard } from './Dashboard';
+import { PlanningMode } from './PlanningMode';
 
 interface MainTerminalProps {
     session: Session;
@@ -83,6 +85,8 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
     const [auditSearch, setAuditSearch] = useState('');
     const [showReAnalyzeConfirm, setShowReAnalyzeConfirm] = useState<'analyze' | 'tasks' | null>(null);
     const [savingIssueId, setSavingIssueId] = useState<number | null>(null);
+    const [showDashboard, setShowDashboard] = useState(false);
+    const [activeView, setActiveView] = useState<'terminal' | 'planning'>('terminal');
 
     const [showGHToken, setShowGHToken] = useState(false);
     const [showTrelloKey, setShowTrelloKey] = useState(false);
@@ -1361,6 +1365,13 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
 
     return (
         <div className="flex flex-col w-full min-h-[100dvh] selection:bg-sky-500/30 relative bg-[#0a0c10] text-slate-200">
+            {/* Dashboard de Métricas */}
+            {showDashboard && (
+                <Dashboard
+                    audits={recentAudits}
+                    onClose={() => setShowDashboard(false)}
+                />
+            )}
             {/* Modal de Carga Neural */}
             {isAnalyzing && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-xl">
@@ -1452,6 +1463,16 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                 </div>
 
                 <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8 w-full md:w-auto">
+                    {/* Botón Dashboard */}
+                    {isDbConnected && recentAudits.length > 0 && (
+                        <button
+                            onClick={() => setShowDashboard(true)}
+                            className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-full transition-all"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                            Métricas
+                        </button>
+                    )}
                     <div className="flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/20 px-4 py-2 rounded-full">
                         <div className="w-2 h-2 rounded-full bg-indigo-400"></div>
                         <span className="text-[9px] font-black uppercase tracking-widest text-indigo-300">
@@ -1467,8 +1488,53 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                 </div>
             </header>
 
+            {/* Tab switcher principal */}
+            <div className="border-b border-slate-800/60 bg-slate-950/60 backdrop-blur-sm sticky top-[73px] z-40">
+                <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-10 flex items-center gap-1">
+                    <button
+                        onClick={() => setActiveView('terminal')}
+                        className={`flex items-center gap-2 px-5 py-3.5 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all ${
+                            activeView === 'terminal'
+                                ? 'border-sky-500 text-sky-400'
+                                : 'border-transparent text-slate-500 hover:text-slate-300'
+                        }`}
+                    >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                        Terminal
+                    </button>
+                    <button
+                        onClick={() => setActiveView('planning')}
+                        className={`flex items-center gap-2 px-5 py-3.5 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all ${
+                            activeView === 'planning'
+                                ? 'border-violet-500 text-violet-400'
+                                : 'border-transparent text-slate-500 hover:text-slate-300'
+                        }`}
+                    >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                        Planificación
+                        {issues.length > 0 && (
+                            <span className="bg-violet-500/20 text-violet-300 text-[8px] font-black px-1.5 py-0.5 rounded-full border border-violet-500/30">
+                                {issues.length}
+                            </span>
+                        )}
+                    </button>
+                </div>
+            </div>
+
             <main className="flex-1 w-full p-4 sm:p-6 lg:p-10 space-y-6 md:space-y-12 max-w-[1800px] mx-auto">
-                <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
+                {/* VISTA: PLANIFICACIÓN */}
+                {activeView === 'planning' && (
+                    <PlanningMode
+                        issues={issues}
+                        onToggleDone={handleToggleDone}
+                        currentAuditSummary={summary}
+                    />
+                )}
+
+                {/* VISTA: TERMINAL (contenido original) */}
+                {activeView === 'terminal' && (
+                    <>
+                        <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
                     <div className="lg:col-span-8">
                         <div className="flex flex-col sm:flex-row justify-between items-center bg-[#0d1117] p-2 rounded-lg border border-slate-800 mb-4">
                             <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800 w-full sm:w-auto mb-2 sm:mb-0">
@@ -1926,6 +1992,8 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                             </>
                         )}
                     </div>
+                )}
+                    </>
                 )}
             </main>
 

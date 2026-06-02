@@ -1,4 +1,5 @@
 import { AnalysisResponse, Severity } from "../types";
+import { fetchWithRetry } from "./fetchWithRetry";
 
 const getApiUrl = () => {
   // en producción el frontend y el backend suelen compartir el mismo dominio,
@@ -64,7 +65,7 @@ export const analyzeIssuesWithGroq = async (
   model: string = 'llama-3.3-70b-versatile'
 ): Promise<AnalysisResponse> => {
   try {
-    const response = await fetch(`${getApiUrl()}/api/analyze`, {
+    const response = await fetchWithRetry(`${getApiUrl()}/api/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -93,7 +94,7 @@ export const generateTasksWithGroq = async (
   model: string = 'llama-3.3-70b-versatile'
 ): Promise<AnalysisResponse> => {
   try {
-    const response = await fetch(`${getApiUrl()}/api/analyze`, {
+    const response = await fetchWithRetry(`${getApiUrl()}/api/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
