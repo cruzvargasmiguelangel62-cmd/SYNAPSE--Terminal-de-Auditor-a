@@ -849,27 +849,121 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         }
     };
 
+    // ─── Parser local de tareas pendientes (sin IA) ──────────────────────────────
+    // Extrae ítems marcados como pendientes: ⬜, [ ], TODO:, PENDIENTE:, etc.
+    // Ignora líneas con ✅, [x], [X], HECHO, DONE.
+    const parseLocalTasks = (text: string): Issue[] => {
+        const lines = text.split('\n');
+        const pending: string[] = [];
+
+        // Patrones que indican "completado" → ignorar
+        const donePattern = /^[\s\-*#>]*(?:✅|☑|✓|✔|⬛|\[x\]|\[X\]|\[✓\])/i;
+        const doneWordPattern = /^\s*\d*\.?\s*(?:✅|☑|✓|✔)/;
+
+        // Patrones que indican "pendiente" → extraer
+        const pendingPattern = /^[\s\-*#>]*(?:⬜|\[\s\]|\[ \]|☐)/;
+        const todoPattern   = /^[\s\-*\d.]*(?:TODO|PENDIENTE|PENDING|POR HACER|TO[- ]DO)[:\s]/i;
+        // Línea numerada o de lista sin marca de completado dentro de sección ## PENDIENTE
+        const plainListPattern = /^[\s]*(?:\d+\.|[-*•])\s+(?!✅|☑|✓|✔|⬛|\[x\]|\[X\])/;
+
+        let inPendingSection = false;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+
+            // Detectar encabezados de sección
+            if (/^#{1,3}\s+.*(?:PENDIENTE|PENDING|TODO|POR HACER)/i.test(trimmed)) {
+                inPendingSection = true;
+                continue;
+            }
+            if (/^#{1,3}\s+/.test(trimmed)) {
+                inPendingSection = false;
+            }
+
+            // Saltar líneas de completado
+            if (donePattern.test(trimmed) || doneWordPattern.test(line)) continue;
+
+            let taskText = '';
+            if (pendingPattern.test(line)) {
+                // ⬜ ítem o [ ] ítem
+                taskText = trimmed
+                    .replace(/^[\-*#>\s]*(?:⬜|\[\s\]|\[ \]|☐)\s*/, '')
+                    .replace(/^\*+/, '')
+                    .trim();
+            } else if (todoPattern.test(trimmed)) {
+                taskText = trimmed.replace(/^[\s\-*\d.]*(?:TODO|PENDIENTE|PENDING|POR HACER|TO[- ]DO)[:\s]*/i, '').trim();
+            } else if (inPendingSection && plainListPattern.test(line)) {
+                taskText = trimmed.replace(/^[\s]*(?:\d+\.|[-*•])\s+/, '').trim();
+            }
+
+            if (taskText && taskText.length > 2) {
+                pending.push(taskText);
+            }
+        }
+
+        return pending.map((text, idx) => {
+            // Inferir categoría por palabras clave
+            let category: Issue['category'] = 'Backend';
+            const lower = text.toLowerCase();
+            if (/ui|modal|botón|button|vista|pantalla|diseño|color|texto|mensaje|dropdown|ícono|icon|css|layout/.test(lower)) category = 'UI/UX';
+            else if (/base de datos|bd|tabla|campo|migrac|sql|schema|dato/.test(lower)) category = 'Datos';
+            else if (/seguridad|auth|login|permiso|token|pin|contraseña|acceso/.test(lower)) category = 'Seguridad';
+            else if (/rendimiento|performance|caché|cache|velocidad|lento|optimiz/.test(lower)) category = 'Rendimiento';
+
+            // Inferir severidad por palabras clave
+            let severity = Severity.MEDIUM;
+            if (/bloquea|crítico|crítica|urgente|error|falla|crash|roto|bloqueado|no funciona/.test(lower)) severity = Severity.HIGH;
+            else if (/mejora|sugerencia|opcional|menor|cosmético|detalle/.test(lower)) severity = Severity.LOW;
+
+            return {
+                id: idx + 1,
+                title: text.length > 120 ? text.slice(0, 117) + '...' : text,
+                desc: `Tarea pendiente extraída del documento. ${text}`,
+                category,
+                severity,
+                fix: 'Implementar según el contexto descrito en el título.',
+                isDone: false,
+            } as Issue;
+        });
+    };
+
     const handleGenerateTasks = async () => {
         if (!inputText.trim()) {
             setError('Por favor ingrese texto para procesar');
             return;
         }
 
+        // ── FASE 1: Parser local instantáneo ─────────────────────────────────────
+        // Extrae pendientes del texto sin llamar a la IA.
+        // Los resultados aparecen de inmediato en pantalla.
+        const localTasks = parseLocalTasks(inputText);
+
+        if (localTasks.length > 0) {
+            // Mostrar tareas locales de inmediato (sin bloquear la UI con spinner)
+            setSummary(`${localTasks.length} tarea${localTasks.length !== 1 ? 's' : ''} pendiente${localTasks.length !== 1 ? 's' : ''} detectada${localTasks.length !== 1 ? 's' : ''} (enriqueciendo con IA...)`);
+            setIssues(localTasks);
+            setError(null);
+        }
+
         setIsAnalyzing(true);
-        setLoadingMessage("Generando lista de tareas...");
+        setLoadingMessage(localTasks.length > 0 ? "Enriqueciendo con IA..." : "Generando lista de tareas...");
         setError(null);
-        setSummary('');
-        setIssues([]);
+        if (localTasks.length === 0) {
+            setSummary('');
+            setIssues([]);
+        }
         setCurrentAuditId(null);
         setCurrentAuditMeta(null);
         setCurrentCollaborators([]);
 
+        // ── FASE 2: Enriquecer con IA (si hay créditos / key disponible) ─────────
         try {
             let result: any;
             if (provider === 'groq') {
                 const apiKey = useSystemKey ? undefined : customGroqKey;
                 if (!useSystemKey && !apiKey) throw new Error("API Key de Groq requerida");
-                // BUG FIX: usar systemCredits del estado React (no localStorage) como fuente de verdad
                 if (useSystemKey) {
                     if (systemCredits <= 0) throw new Error("Créditos del sistema agotados. Use su propia API Key.");
                     const next = Math.max(0, systemCredits - 1);
@@ -880,35 +974,32 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
             } else {
                 const apiKey = useSystemKey ? undefined : customGeminiKey;
                 if (!useSystemKey && !apiKey) throw new Error("API Key de Gemini requerida");
-
                 if (useSystemKey) {
                     if (systemCredits <= 0) throw new Error("Créditos del sistema agotados. Use su propia API Key.");
                     const next = Math.max(0, systemCredits - 1);
                     setSystemCredits(next);
                     localStorage.setItem('synapse_credits', next.toString());
                 }
-
                 result = await generateTasks(inputText, apiKey);
             }
 
-            // validar la estructura
             if (!result || !Array.isArray(result.issues)) {
-                console.error('Generación de tareas retornó datos inválidos', result);
-                throw new Error('El servidor no devolvió tareas válidas');
+                // La IA falló pero ya tenemos las tareas locales → mostrar aviso leve
+                if (localTasks.length > 0) {
+                    setSummary(`${localTasks.length} tarea${localTasks.length !== 1 ? 's' : ''} pendiente${localTasks.length !== 1 ? 's' : ''} (extracción local — IA no disponible)`);
+                    addToast('IA no disponible, se usó extracción local', 'info');
+                } else {
+                    throw new Error('El servidor no devolvió tareas válidas');
+                }
+                return;
             }
-            let resultIssues: Issue[] = result.issues;
-            console.debug('tareas recibidas del servidor:', resultIssues);
-            const missingTasks = resultIssues.filter(i => !i.title && !i.desc).length;
-            if (missingTasks) {
-                console.warn(`${missingTasks} tareas sin título ni descripción`, resultIssues);
-            }
-            // BUG FIX: un solo filtro consolidado (antes había dos, el segundo nunca se usaba)
-            resultIssues = resultIssues.filter(i => i.title || i.desc);
 
-            // some providers/models may not return a summary for task lists
-            // así que garantizamos un valor legible.
+            let resultIssues: Issue[] = result.issues.filter((i: any) => i.title || i.desc);
+            console.debug('tareas recibidas del servidor:', resultIssues);
+
             const displaySummary = result.summary && result.summary.trim() ? result.summary : '(sin resumen)';
             setSummary(displaySummary);
+            setIssues(resultIssues);
 
             if (supabase && session) {
                 if (currentAuditId) {
@@ -947,7 +1038,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                     }
                     if (insertedIssues) {
                         const finalIssues = resultIssues.map(i => {
-                            const dbRecord = insertedIssues.find(si => si.external_id === i.id);
+                            const dbRecord = insertedIssues.find((si: any) => si.external_id === i.id);
                             return { ...i, dbId: dbRecord?.id, isDone: false, assigneeEmail: dbRecord?.assignee_email || '', collaboratorNote: dbRecord?.collaborator_note || '' };
                         });
                         setIssues(finalIssues);
@@ -1017,8 +1108,14 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         } catch (err: any) {
             console.error('Error en handleGenerateTasks:', err);
             const msg = err?.message || 'Error al generar tareas';
-            setError(msg);
-            addToast(msg, 'error');
+            // Si ya tenemos tareas locales, NO sobreescribir con error; solo avisar
+            if (localTasks.length > 0) {
+                setSummary(`${localTasks.length} tarea${localTasks.length !== 1 ? 's' : ''} pendiente${localTasks.length !== 1 ? 's' : ''} detectada${localTasks.length !== 1 ? 's' : ''} (IA no disponible: ${msg})`);
+                addToast(`Extracción local completada. IA: ${msg}`, 'info');
+            } else {
+                setError(msg);
+                addToast(msg, 'error');
+            }
         } finally {
             setIsAnalyzing(false);
             setLoadingMessage("Analizando trazas...");

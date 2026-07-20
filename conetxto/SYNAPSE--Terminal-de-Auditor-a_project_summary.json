@@ -1,0 +1,219 @@
+{
+  "projectName": "SYNAPSE--Terminal-de-Auditor-a",
+  "generatedBy": "ProjectGrapher local deterministic analysis",
+  "generatedAt": "20/7/2026, 5:25:12 p.m.",
+  "validityNote": "Usa este archivo como referencia estructural y valida contra el código activo antes de cambiar reglas de negocio.",
+  "summary": {
+    "files": 25,
+    "links": 28,
+    "nodes": 25
+  },
+  "languages": {
+    "TypeScript/React": 12,
+    "JavaScript": 3,
+    "CSS": 1,
+    "HTML": 1,
+    "TypeScript": 8
+  },
+  "technologies": [
+    "React",
+    "TypeScript",
+    "Express.js",
+    "JavaScript",
+    "Tailwind CSS",
+    "CSS",
+    "HTML",
+    "Vite"
+  ],
+  "databases": [
+    "PostgreSQL"
+  ],
+  "layers": {
+    "frontend": 14,
+    "backend": 0,
+    "workers": 0,
+    "storage": 1
+  },
+  "entryPoints": [
+    "SYNAPSE--Terminal-de-Auditor-a/App.tsx",
+    "SYNAPSE--Terminal-de-Auditor-a/backend/server.js"
+  ],
+  "hotspots": [
+    {
+      "path": "SYNAPSE--Terminal-de-Auditor-a/App.tsx",
+      "importance": 0,
+      "ext": ".tsx"
+    },
+    {
+      "path": "SYNAPSE--Terminal-de-Auditor-a/backend/server.js",
+      "importance": 0,
+      "ext": ".js"
+    },
+    {
+      "path": "SYNAPSE--Terminal-de-Auditor-a/components/Auth.tsx",
+      "importance": 0,
+      "ext": ".tsx"
+    },
+    {
+      "path": "SYNAPSE--Terminal-de-Auditor-a/components/AuthFooter.tsx",
+      "importance": 0,
+      "ext": ".tsx"
+    },
+    {
+      "path": "SYNAPSE--Terminal-de-Auditor-a/components/AuthHeader.tsx",
+      "importance": 0,
+      "ext": ".tsx"
+    },
+    {
+      "path": "SYNAPSE--Terminal-de-Auditor-a/components/Dashboard.tsx",
+      "importance": 0,
+      "ext": ".tsx"
+    },
+    {
+      "path": "SYNAPSE--Terminal-de-Auditor-a/components/IssueTable.tsx",
+      "importance": 0,
+      "ext": ".tsx"
+    },
+    {
+      "path": "SYNAPSE--Terminal-de-Auditor-a/components/KeepAlive.tsx",
+      "importance": 0,
+      "ext": ".tsx"
+    },
+    {
+      "path": "SYNAPSE--Terminal-de-Auditor-a/components/MainTerminal.tsx",
+      "importance": 0,
+      "ext": ".tsx"
+    },
+    {
+      "path": "SYNAPSE--Terminal-de-Auditor-a/components/MicrophoneButton.tsx",
+      "importance": 0,
+      "ext": ".tsx"
+    }
+  ],
+  "sourcesOfTruth": [
+    {
+      "label": "Reglas de negocio",
+      "summary": "Aquí suelen vivir decisiones funcionales, validaciones y cálculo de estados.",
+      "files": [
+        "SYNAPSE--Terminal-de-Auditor-a/backend/server.js",
+        "SYNAPSE--Terminal-de-Auditor-a/components/IssueTable.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/components/MainTerminal.tsx"
+      ]
+    },
+    {
+      "label": "Estado global y contexto",
+      "summary": "Aquí suele vivir el acceso global, la sesión y la propagación de estado.",
+      "files": [
+        "SYNAPSE--Terminal-de-Auditor-a/components/Toast.tsx"
+      ]
+    },
+    {
+      "label": "Integraciones y API",
+      "summary": "Aquí suelen vivir llamadas externas, endpoints y capa de integración.",
+      "files": [
+        "SYNAPSE--Terminal-de-Auditor-a/backend/server.js",
+        "SYNAPSE--Terminal-de-Auditor-a/components/KeepAlive.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/components/MainTerminal.tsx"
+      ]
+    },
+    {
+      "label": "UI y orquestación",
+      "summary": "Aquí suelen vivir pantallas, flujos visibles y orquestadores de interfaz.",
+      "files": [
+        "SYNAPSE--Terminal-de-Auditor-a/App.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/components/Auth.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/components/Dashboard.tsx"
+      ]
+    },
+    {
+      "label": "Autenticación y acceso",
+      "summary": "Aquí suele vivir el control de acceso, sesión y reglas de identidad.",
+      "files": [
+        "SYNAPSE--Terminal-de-Auditor-a/App.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/backend/server.js",
+        "SYNAPSE--Terminal-de-Auditor-a/components/Auth.tsx"
+      ]
+    }
+  ],
+  "criticalFlows": [
+    {
+      "label": "Autenticación y acceso",
+      "terms": [
+        "auth",
+        "login",
+        "signin",
+        "session",
+        "token",
+        "guard"
+      ],
+      "why": "Conviene empezar aquí si el flujo depende de sesión, permisos o acceso global.",
+      "files": [
+        "SYNAPSE--Terminal-de-Auditor-a/App.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/components/Auth.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/components/AuthFooter.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/components/AuthHeader.tsx"
+      ]
+    },
+    {
+      "label": "Pagos y bloqueo funcional",
+      "terms": [
+        "payment",
+        "payments",
+        "billing",
+        "checkout",
+        "invoice",
+        "warning"
+      ],
+      "why": "Conviene revisar estas piezas si el negocio depende de validación, tolerancia, bloqueo o desbloqueo.",
+      "files": [
+        "SYNAPSE--Terminal-de-Auditor-a/components/Toast.tsx"
+      ]
+    },
+    {
+      "label": "Onboarding o navegación principal",
+      "terms": [
+        "router",
+        "route",
+        "layout",
+        "dashboard",
+        "home",
+        "app"
+      ],
+      "why": "Ayuda a reconstruir por dónde entra el usuario y cómo se mueve entre pantallas.",
+      "files": [
+        "SYNAPSE--Terminal-de-Auditor-a/App.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/backend/server.js",
+        "SYNAPSE--Terminal-de-Auditor-a/components/Dashboard.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/components/IssueTable.tsx"
+      ]
+    },
+    {
+      "label": "Estado global del usuario",
+      "terms": [
+        "context",
+        "provider",
+        "store",
+        "zustand",
+        "student",
+        "user"
+      ],
+      "why": "Útil para detectar dónde vive la información compartida que condiciona la UI.",
+      "files": [
+        "SYNAPSE--Terminal-de-Auditor-a/App.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/components/IssueTable.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/components/MainTerminal.tsx",
+        "SYNAPSE--Terminal-de-Auditor-a/components/MicrophoneButton.tsx"
+      ]
+    }
+  ],
+  "agentHint": {
+    "purpose": "Usa este archivo para darle a otro agente una ficha técnica rápida y determinista del proyecto.",
+    "recommendedFiles": [
+      "SYNAPSE--Terminal-de-Auditor-a/App.tsx",
+      "SYNAPSE--Terminal-de-Auditor-a/backend/server.js",
+      "SYNAPSE--Terminal-de-Auditor-a/components/Auth.tsx",
+      "SYNAPSE--Terminal-de-Auditor-a/components/AuthFooter.tsx",
+      "SYNAPSE--Terminal-de-Auditor-a/components/AuthHeader.tsx"
+    ]
+  }
+}
