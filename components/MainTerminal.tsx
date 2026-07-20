@@ -849,34 +849,38 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         }
     };
 
-    // ─── Parser local de tareas pendientes (sin IA) ──────────────────────────────
-    // Extrae ítems marcados como pendientes: ⬜, [ ], TODO:, PENDIENTE:, ## PENDIENTE, etc.
-    // Ignora líneas con ✅, [x], [X], HECHO, DONE.
+    // ─── Parser local de tareas (sin IA) ─────────────────────────────────────────
+    // Extrae TODOS los ítems: ✅ completados (isDone:true) y ⬜ pendientes (isDone:false).
+    // Secciones ## HECHO / ## PENDIENTE guían el contexto.
     const parseLocalTasks = (text: string): Issue[] => {
         const lines = text.split('\n');
 
-        // Patrones "completado" → ignorar
-        const donePattern    = /^[\s\-*#>]*(?:✅|☑|✓|✔|⬛|\[x\]|\[X\]|\[✓\])/i;
-        const doneWordPat    = /^\s*\d*\.?\s*(?:✅|☑|✓|✔)/;
+        // Patrones "completado"
+        const donePat      = /^[\s\-*#>]*(?:✅|☑|✓|✔|⬛|\[x\]|\[X\]|\[✓\])/i;
+        const doneWordPat  = /^\s*\d*\.?\s*(?:✅|☑|✓|✔)/;
 
-        // Patrones "pendiente" → extraer
-        const pendingPat     = /^[\s\-*#>]*(?:⬜|\[\s\]|\[ \]|☐)/;
-        const todoPat        = /^[\s\-*\d.]*(?:TODO|PENDIENTE|PENDING|POR HACER|TO[- ]DO)[:\s]/i;
-        const plainListPat   = /^[\s]*(?:\d+\.|[-*•])\s+(?!✅|☑|✓|✔|⬛|\[x\]|\[X\])/;
+        // Patrones "pendiente"
+        const pendingPat   = /^[\s\-*#>]*(?:⬜|\[\s\]|\[ \]|☐)/;
+        const todoPat      = /^[\s\-*\d.]*(?:TODO|PENDIENTE|PENDING|POR HACER|TO[- ]DO)[:\s]/i;
+        const plainListPat = /^[\s]*(?:\d+\.|[-*•])\s+/;
 
         // Limpieza del texto extraído
         const cleanTitle = (raw: string): string =>
             raw
-                .replace(/^\*{1,2}(.*?)\*{1,2}$/, '$1')   // **bold** o *italic*
-                .replace(/\*{1,2}/g, '')                    // asteriscos sueltos
-                .replace(/^[\s\d.\-:]+/, '')                // número o guion inicial
-                .replace(/\*\*(.*?)\*\*/g, '$1')            // inline bold
-                .replace(/`([^`]+)`/g, '$1')                // inline code
-                .replace(/^[🔒🔍📋⚠️🚫🔑🎯💡🛠️📌✨🔧📦🗂️]+\s*/, '') // emojis decorativos al inicio
+                .replace(/~~(.*?)~~/g, '$1')                 // ~~tachado~~ → texto limpio
+                .replace(/^\*{1,2}(.*?)\*{1,2}$/, '$1')     // **bold**
+                .replace(/\*{1,2}/g, '')                     // asteriscos sueltos
+                .replace(/^[\s\d.\-:]+/, '')                 // número o guion inicial
+                .replace(/\*\*(.*?)\*\*/g, '$1')             // inline bold
+                .replace(/`([^`]+)`/g, '$1')                 // inline code
+                .replace(/^[🔒🔍📋⚠️🚫🔑🎯💡🛠️📌✨🔧📦🗂️]+\s*/, '') // emojis deco
                 .trim();
 
-        let inPendingSection = false;
-        const results: Array<{ title: string; context: string }> = [];
+        // Estado de sección
+        type SectionType = 'pending' | 'done' | 'neutral';
+        let section: SectionType = 'neutral';
+
+        const results: Array<{ title: string; context: string; isDone: boolean }> = [];
 
         for (let i = 0; i < lines.length; i++) {
             const line    = lines[i];
@@ -884,82 +888,88 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
             if (!trimmed) continue;
 
             // Detectar encabezados de sección
-            if (/^#{1,3}\s+.*(?:PENDIENTE|PENDING|TODO|POR HACER)/i.test(trimmed)) {
-                inPendingSection = true;
-                continue;
-            }
             if (/^#{1,3}\s+/.test(trimmed)) {
-                inPendingSection = false;
+                if (/PENDIENTE|PENDING|TODO|POR HACER/i.test(trimmed)) section = 'pending';
+                else if (/HECHO|DONE|COMPLETADO|RESUELTO/i.test(trimmed))  section = 'done';
+                else section = 'neutral';
                 continue;
             }
 
-            // Saltar líneas completadas
-            if (donePattern.test(trimmed) || doneWordPat.test(line)) continue;
+            // Detectar si la línea tiene marca explícita
+            const isExplicitlyDone    = donePat.test(trimmed) || doneWordPat.test(line);
+            const isExplicitlyPending = pendingPat.test(line) || todoPat.test(trimmed);
+
+            // Determinar si es ítem de lista plain
+            const isListItem = plainListPat.test(line);
 
             let rawText = '';
-            if (pendingPat.test(line)) {
-                rawText = trimmed.replace(/^[\-*#>\s]*(?:⬜|\[\s\]|\[ \]|☐)\s*/, '').trim();
-            } else if (todoPat.test(trimmed)) {
-                rawText = trimmed.replace(/^[\s\-*\d.]*(?:TODO|PENDIENTE|PENDING|POR HACER|TO[- ]DO)[:\s]*/i, '').trim();
-            } else if (inPendingSection && plainListPat.test(line)) {
+            let isDone = false;
+
+            if (isExplicitlyDone) {
+                // ✅ ítem — extraer y marcar como done
+                rawText = trimmed
+                    .replace(/^[\s\-*#>]*(?:✅|☑|✓|✔|⬛|\[x\]|\[X\]|\[✓\])\s*/, '')
+                    .replace(/^\s*\d*\.?\s*/, '')
+                    .trim();
+                isDone = true;
+            } else if (isExplicitlyPending) {
+                // ⬜ ítem — pendiente
+                rawText = pendingPat.test(line)
+                    ? trimmed.replace(/^[\-*#>\s]*(?:⬜|\[\s\]|\[ \]|☐)\s*/, '').trim()
+                    : trimmed.replace(/^[\s\-*\d.]*(?:TODO|PENDIENTE|PENDING|POR HACER|TO[- ]DO)[:\s]*/i, '').trim();
+                isDone = false;
+            } else if (isListItem && section !== 'neutral') {
+                // Ítem de lista dentro de sección conocida
                 rawText = trimmed.replace(/^[\s]*(?:\d+\.|[-*•])\s+/, '').trim();
+                isDone = section === 'done';
             }
 
             if (!rawText || rawText.length < 3) continue;
 
-            // Buscar la siguiente línea no vacía como contexto extra
+            // Buscar la siguiente línea como contexto
             let context = '';
             for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
                 const next = lines[j].trim();
                 if (!next) continue;
-                // Solo usar como contexto si no es otro ítem de lista ni un encabezado
-                if (/^#{1,3}\s/.test(next) || pendingPat.test(lines[j]) || donePattern.test(next)) break;
-                if (/^[\-*•]\s|^\d+\.\s/.test(next) && !inPendingSection) break;
-                context = next
-                    .replace(/\*{1,2}/g, '')
-                    .replace(/`([^`]+)`/g, '$1')
-                    .trim();
+                if (/^#{1,3}\s/.test(next)) break;
+                // No usar como contexto otro ítem de lista
+                if (donePat.test(next) || pendingPat.test(lines[j]) || plainListPat.test(lines[j])) break;
+                context = next.replace(/\*{1,2}/g, '').replace(/`([^`]+)`/g, '$1').trim();
                 break;
             }
 
-            results.push({ title: cleanTitle(rawText), context });
+            results.push({ title: cleanTitle(rawText), context, isDone });
         }
 
         // Función que genera fix técnico según categoría
-        const getFix = (cat: Issue['category'], title: string): string => {
+        const getFix = (cat: Issue['category']): string => {
             switch (cat) {
-                case 'UI/UX':      return `Implementar en el componente correspondiente. Revisar consistencia visual con el resto de la interfaz. Probar en móvil y desktop.`;
-                case 'Backend':    return `Implementar en el endpoint o servicio correspondiente. Validar entrada, manejar errores y responder con código HTTP apropiado (200/422/500).`;
-                case 'Datos':      return `Revisar el esquema de la tabla afectada. Crear migración si es necesario. Validar integridad referencial.`;
-                case 'Seguridad':  return `Revisar flujo de autenticación/autorización. Verificar que no haya bypass posible. Agregar log de auditoría si aplica.`;
-                case 'Rendimiento':return `Revisar consultas o renders costosos. Agregar caché o memoización donde corresponda. Medir impacto con DevTools.`;
-                default:           return `Implementar según el contexto descrito en el título.`;
+                case 'UI/UX':       return 'Implementar en el componente correspondiente. Revisar consistencia visual. Probar en móvil y desktop.';
+                case 'Backend':     return 'Implementar en el endpoint o servicio. Validar entrada, manejar errores (200/422/500).';
+                case 'Datos':       return 'Revisar esquema de tabla. Crear migración si es necesario. Validar integridad referencial.';
+                case 'Seguridad':   return 'Revisar flujo de autenticación/autorización. Verificar que no haya bypass. Agregar log de auditoría.';
+                case 'Rendimiento': return 'Revisar queries o renders costosos. Agregar caché/memoización. Medir con DevTools.';
+                default:            return 'Implementar según el contexto descrito en el título.';
             }
         };
 
-        return results.map(({ title, context }, idx) => {
+        return results.map(({ title, context, isDone }, idx) => {
             const lower = title.toLowerCase() + ' ' + context.toLowerCase();
 
-            // Inferir categoría — palabras de dominio general + dominio específico del proyecto
             let category: Issue['category'] = 'Backend';
-            if (/ui|modal|botón|button|vista|pantalla|diseño|color|texto|mensaje|dropdown|ícono|icon|css|layout|banner|columna|fila|tabla visua|candado visua|propuesta visua/.test(lower)) category = 'UI/UX';
+            if (/ui|modal|botón|button|vista|pantalla|diseño|color|texto|mensaje|dropdown|ícono|icon|css|layout|banner|columna|fila|candado visua/.test(lower)) category = 'UI/UX';
             else if (/base de datos|bd|tabla|campo|migrac|sql|schema|dato|registro|insert|update|delete|supabase|query/.test(lower)) category = 'Datos';
             else if (/seguridad|auth|login|permiso|token|pin|contraseña|acceso|telegram|verificac/.test(lower)) category = 'Seguridad';
             else if (/rendimiento|performance|caché|cache|velocidad|lento|optimiz|re-render|memo/.test(lower)) category = 'Rendimiento';
-            // Palabras de dominio del proyecto (fermentación, molienda, botes, traspaleo…)
             else if (/bote|ciclo|traspal|molienda|liberac|medición|medicion|ferment|c1|e&f|etapa|propuesta|mezcla|jugo|asignar/.test(lower)) category = 'Backend';
 
-            // Inferir severidad
             let severity = Severity.MEDIUM;
-            if (/bloquea|crítico|crítica|urgente|crash|roto|bloqueado|no funciona|impide|falla|error|hasta que/.test(lower)) severity = Severity.HIGH;
+            if (/bloquea|crítico|crítica|urgente|crash|roto|bloqueado|no funciona|impide|falla|hasta que/.test(lower)) severity = Severity.HIGH;
             else if (/mejora|sugerencia|opcional|menor|cosmético|detalle|texto|cambiar texto|renombr/.test(lower)) severity = Severity.LOW;
 
-            // Construir desc útil usando contexto real
-            const descParts: string[] = [];
-            if (context && context !== title) descParts.push(context);
-            const desc = descParts.length > 0
-                ? descParts.join(' ')
-                : `Implementar: ${title.length > 80 ? title.slice(0, 80) + '...' : title}`;
+            const desc = (context && context !== title)
+                ? context
+                : `${isDone ? 'Completado' : 'Implementar'}: ${title.length > 80 ? title.slice(0, 80) + '...' : title}`;
 
             return {
                 id: idx + 1,
@@ -967,8 +977,8 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                 desc,
                 category,
                 severity,
-                fix: getFix(category, title),
-                isDone: false,
+                fix: getFix(category),
+                isDone,
             } as Issue;
         });
     };
@@ -986,7 +996,12 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
 
         if (localTasks.length > 0) {
             // Mostrar tareas locales de inmediato (sin bloquear la UI con spinner)
-            setSummary(`${localTasks.length} tarea${localTasks.length !== 1 ? 's' : ''} pendiente${localTasks.length !== 1 ? 's' : ''} detectada${localTasks.length !== 1 ? 's' : ''} (enriqueciendo con IA...)`);
+            const doneCnt    = localTasks.filter(t => t.isDone).length;
+            const pendingCnt = localTasks.filter(t => !t.isDone).length;
+            const summaryParts: string[] = [];
+            if (doneCnt > 0)    summaryParts.push(`${doneCnt} completada${doneCnt !== 1 ? 's' : ''} ✅`);
+            if (pendingCnt > 0) summaryParts.push(`${pendingCnt} pendiente${pendingCnt !== 1 ? 's' : ''} ⬜`);
+            setSummary(`${localTasks.length} tareas detectadas — ${summaryParts.join(' + ')} (enriqueciendo con IA...)`);
             setIssues(localTasks);
             setError(null);
         }
