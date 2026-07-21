@@ -867,12 +867,13 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
         // Limpieza del texto extraído
         const cleanTitle = (raw: string): string =>
             raw
-                .replace(/~~(.*?)~~/g, '$1')                 // ~~tachado~~ → texto limpio
-                .replace(/^\*{1,2}(.*?)\*{1,2}$/, '$1')     // **bold**
-                .replace(/\*{1,2}/g, '')                     // asteriscos sueltos
-                .replace(/^[\s\d.\-:]+/, '')                 // número o guion inicial
-                .replace(/\*\*(.*?)\*\*/g, '$1')             // inline bold
-                .replace(/`([^`]+)`/g, '$1')                 // inline code
+                .replace(/~~(.*?)~~/g, '$1')                         // ~~tachado~~ → texto
+                .replace(/^[✅☑✓✔⬛⬜☐\[x\]\[X\]]+\s*/u, '')         // emoji estado al inicio
+                .replace(/^\*{1,2}(.*?)\*{1,2}$/, '$1')             // **bold** completo
+                .replace(/\*{1,2}/g, '')                             // asteriscos sueltos
+                .replace(/^[\s\d.\-:\[\]xX]+/, '')                   // número/guion/[x] inicial
+                .replace(/\*\*(.*?)\*\*/g, '$1')                     // inline bold
+                .replace(/`([^`]+)`/g, '$1')                         // inline code
                 .replace(/^[🔒🔍📋⚠️🚫🔑🎯💡🛠️📌✨🔧📦🗂️]+\s*/, '') // emojis deco
                 .trim();
 
@@ -1042,22 +1043,46 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                 result = await generateTasks(inputText, apiKey);
             }
 
-            if (!result || !Array.isArray(result.issues)) {
-                // La IA falló pero ya tenemos las tareas locales → mostrar aviso leve
+            let resultIssues: Issue[] = [];
+            let displaySummary = '';
+
+            if (result && Array.isArray(result.issues)) {
+                resultIssues = result.issues.filter((i: any) => i.title || i.desc);
+                console.debug('tareas recibidas del servidor:', resultIssues);
+
+                // PROTECCIÓN: si la IA devolvió menos del 70% de lo que encontró el parser local,
+                // NO sobrescribir — la IA probablemente ignoró los ítems completados.
+                if (localTasks.length > 0 && resultIssues.length < localTasks.length * 0.7) {
+                    const doneCnt    = localTasks.filter(t => t.isDone).length;
+                    const pendingCnt = localTasks.filter(t => !t.isDone).length;
+                    const parts: string[] = [];
+                    if (doneCnt > 0)    parts.push(`${doneCnt} completadas ✅`);
+                    if (pendingCnt > 0) parts.push(`${pendingCnt} pendientes ⬜`);
+                    displaySummary = `${localTasks.length} tareas extraídas — ${parts.join(' + ')} (extracción local)`;
+                    setSummary(displaySummary);
+                    addToast(`IA devolvió ${resultIssues.length} items vs ${localTasks.length} locales — se mantiene extracción completa`, 'info');
+                    resultIssues = localTasks;
+                } else {
+                    displaySummary = result.summary && result.summary.trim() ? result.summary : '(sin resumen)';
+                    setSummary(displaySummary);
+                }
+            } else {
+                // La IA falló pero ya tenemos las tareas locales → usar la extracción local
                 if (localTasks.length > 0) {
-                    setSummary(`${localTasks.length} tarea${localTasks.length !== 1 ? 's' : ''} pendiente${localTasks.length !== 1 ? 's' : ''} (extracción local — IA no disponible)`);
-                    addToast('IA no disponible, se usó extracción local', 'info');
+                    const doneCnt    = localTasks.filter(t => t.isDone).length;
+                    const pendingCnt = localTasks.filter(t => !t.isDone).length;
+                    const parts: string[] = [];
+                    if (doneCnt > 0)    parts.push(`${doneCnt} completadas ✅`);
+                    if (pendingCnt > 0) parts.push(`${pendingCnt} pendientes ⬜`);
+                    displaySummary = `${localTasks.length} tareas extraídas — ${parts.join(' + ')} (extracción local)`;
+                    setSummary(displaySummary);
+                    addToast('La IA no devolvió resultados válidos, se usó extracción local', 'info');
+                    resultIssues = localTasks;
                 } else {
                     throw new Error('El servidor no devolvió tareas válidas');
                 }
-                return;
             }
 
-            let resultIssues: Issue[] = result.issues.filter((i: any) => i.title || i.desc);
-            console.debug('tareas recibidas del servidor:', resultIssues);
-
-            const displaySummary = result.summary && result.summary.trim() ? result.summary : '(sin resumen)';
-            setSummary(displaySummary);
             setIssues(resultIssues);
 
             if (supabase && session) {
@@ -1083,7 +1108,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                                 category: i.category,
                                 severity: i.severity || Severity.LOW,
                                 fix_plan: i.fix || 'Pendiente de resolución técnica.',
-                                is_done: false,
+                                is_done: i.isDone || false,
                                 assignee_email: i.assigneeEmail || null,
                                 collaborator_note: i.collaboratorNote || ''
                             };
@@ -1098,7 +1123,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                     if (insertedIssues) {
                         const finalIssues = resultIssues.map(i => {
                             const dbRecord = insertedIssues.find((si: any) => si.external_id === i.id);
-                            return { ...i, dbId: dbRecord?.id, isDone: false, assigneeEmail: dbRecord?.assignee_email || '', collaboratorNote: dbRecord?.collaborator_note || '' };
+                            return { ...i, dbId: dbRecord?.id, isDone: dbRecord?.is_done || false, assigneeEmail: dbRecord?.assignee_email || '', collaboratorNote: dbRecord?.collaborator_note || '' };
                         });
                         setIssues(finalIssues);
                     }
@@ -1108,7 +1133,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                     const { data: audit, error: auditError } = await supabase
                         .from('audits')
                         .insert([{
-                            summary: `[TAREAS] ${result.summary}`,
+                            summary: `[TAREAS] ${displaySummary}`,
                             input_text: inputText,
                             user_id: session.user.id
                         }])
@@ -1122,7 +1147,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         setCurrentAuditMeta({
                             ...mapAuditWithStatus(audit),
                             id: audit.id,
-                            summary: `[TAREAS] ${result.summary}`,
+                            summary: `[TAREAS] ${displaySummary}`,
                         });
                         setCurrentCollaborators([]);
                         const tasksToInsert = resultIssues
@@ -1138,7 +1163,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                                     category: i.category,
                                     severity: i.severity || Severity.LOW,
                                     fix_plan: i.fix || 'Pendiente de resolución técnica.',
-                                    is_done: false,
+                                    is_done: i.isDone || false,
                                     assignee_email: i.assigneeEmail || null,
                                     collaborator_note: i.collaboratorNote || ''
                                 };
@@ -1154,7 +1179,7 @@ export const MainTerminal: React.FC<MainTerminalProps> = ({ session }) => {
                         if (insertedIssues) {
                             const finalIssues = resultIssues.map(i => {
                                 const dbRecord = insertedIssues.find(si => si.external_id === i.id);
-                                return { ...i, dbId: dbRecord?.id, isDone: false, assigneeEmail: dbRecord?.assignee_email || '', collaboratorNote: dbRecord?.collaborator_note || '' };
+                                return { ...i, dbId: dbRecord?.id, isDone: dbRecord?.is_done || false, assigneeEmail: dbRecord?.assignee_email || '', collaboratorNote: dbRecord?.collaborator_note || '' };
                             });
                             setIssues(finalIssues);
                         }
